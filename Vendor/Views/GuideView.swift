@@ -19,12 +19,16 @@ struct GuideView: View {
 	var body: some View {
 		Screen(t("tab.guide"), contentBlur: opened == nil ? 0 : 16) {
 			searchField
-			VStack(spacing: 8) {
-				ForEach(filtered) { guide in
-					Button { opened = guide } label: {
-						row(for: guide)
+			if filtered.isEmpty {
+				emptyState
+			} else {
+				VStack(spacing: 8) {
+					ForEach(filtered) { guide in
+						Button { opened = guide } label: {
+							row(for: guide)
+						}
+						.buttonStyle(.plain)
 					}
-					.buttonStyle(.plain)
 				}
 			}
 		}
@@ -49,6 +53,20 @@ struct GuideView: View {
 		// that is meant to be floating clear of the screen. Taking it away for
 		// as long as the guide is open is what finishes the effect.
 		.toolbar(opened == nil ? .visible : .hidden, for: .tabBar)
+	}
+
+	/// A search with no hits used to leave the screen blank below the field,
+	/// which reads as the app having broken rather than as nothing matching.
+	private var emptyState: some View {
+		VStack(spacing: 8) {
+			GlyphTile(systemName: "magnifyingglass", size: 46)
+			Text(t("guide.noMatches"))
+				.font(.system(size: 15, weight: .semibold))
+				.foregroundStyle(Color.inkPrimary)
+		}
+		.frame(maxWidth: .infinity)
+		.padding(.vertical, 34)
+		.card()
 	}
 
 	private var searchField: some View {

@@ -308,6 +308,7 @@ enum Strings {
 		"certs.password":   (en: "Password", es: "Contraseña"),
 		"common.close":     (en: "Close",    es: "Cerrar"),
 		"guide.search":     (en: "Search guides...", es: "Buscar guías..."),
+		"guide.noMatches":  (en: "No matching guide", es: "Ninguna guía coincide"),
 		"certs.nickname":   (en: "Nickname", es: "Apodo"),
 		"certs.certificateFile": (en: "Certificate File",   es: "Archivo de certificado"),
 		"certs.provisionFile":   (en: "Provisioning File",  es: "Archivo de aprovisionamiento"),

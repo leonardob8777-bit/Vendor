@@ -15,7 +15,7 @@ import SwiftUI
 
 struct GuideDetailSheet: View {
 	let guide: GuideEntry
-	/// Called when the close button is tapped, which is the only way out.
+	/// Called by the close button and by a tap outside the panel.
 	var dismiss: () -> Void
 
 	var body: some View {
@@ -26,8 +26,13 @@ struct GuideDetailSheet: View {
 			// flat 18% and it read as a black sheet laid over the top of the
 			// display. The blurred content behind and the pane's own material
 			// separate the two planes on their own.
+			// Tapping away closes it, the same as the app, language and trust
+			// windows. This one only had its X button, so the same gesture did
+			// nothing here and worked everywhere else.
 			Color.clear
 				.ignoresSafeArea()
+				.contentShape(Rectangle())
+				.onTapGesture(perform: dismiss)
 
 			panel
 				.padding(.horizontal, 26)
