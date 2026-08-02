@@ -168,6 +168,38 @@ enum Strings {
 			es: "Todavía no se puede descargar."
 		),
 		"apps.source":      (en: "Source",              es: "Fuente"),
+		"apps.sourceFailed": (
+			en: "%@ could not be loaded.",
+			es: "No se pudo cargar %@."
+		),
+
+		// Repositories
+		"sources.title":  (en: "Repositories", es: "Repositorios"),
+		"sources.detail": (
+			en: "Add a repository to see its apps alongside the built-in one. It must publish an AltStore-format source.",
+			es: "Añade un repositorio para ver sus apps junto a las del incluido. Tiene que publicar una fuente en formato AltStore."
+		),
+		"sources.placeholder": (en: "https://…/source.json", es: "https://…/source.json"),
+		"sources.add":      (en: "Add",        es: "Añadir"),
+		"sources.checking": (en: "Checking…",  es: "Comprobando…"),
+		"sources.added":    (en: "Added",      es: "Añadidos"),
+		"sources.none": (
+			en: "None yet. Only the repository Vendor ships with is being shown.",
+			es: "Todavía ninguno. Solo se muestra el repositorio que trae Vendor."
+		),
+		"sources.remove":   (en: "Remove repository", es: "Quitar repositorio"),
+		"sources.notAURL": (
+			en: "That is not a web address. It should start with https://",
+			es: "Eso no es una dirección web. Debería empezar por https://"
+		),
+		"sources.alreadyAdded": (
+			en: "That repository is already on the list.",
+			es: "Ese repositorio ya está en la lista."
+		),
+		"sources.unreadable": (
+			en: "Could not read that repository: %@",
+			es: "No se pudo leer ese repositorio: %@"
+		),
 		"apps.downloadFailed": (en: "Download failed",  es: "Falló la descarga"),
 		"apps.cancelDownload": (en: "Cancel download",  es: "Cancelar descarga"),
 		"err.bundled.missing": (

@@ -95,7 +95,7 @@ struct IPAView: View {
 			}
 
 			if let failure {
-				calloutRow(failure)
+				CalloutRow(text: failure)
 			}
 		}
 		.animation(.easeInOut(duration: 0.25), value: running == nil && !showingTrustSetup)
@@ -853,19 +853,4 @@ struct IPAView: View {
 		.card()
 	}
 
-	private func calloutRow(_ text: String) -> some View {
-		HStack(alignment: .top, spacing: 10) {
-			Image(systemName: "exclamationmark.triangle")
-				.font(.system(size: 14, weight: .semibold))
-				.foregroundStyle(Color.warn)
-			Text(text)
-				.font(.system(size: 12))
-				.foregroundStyle(Color.inkPrimary)
-				.fixedSize(horizontal: false, vertical: true)
-			Spacer(minLength: 0)
-		}
-		.padding(12)
-		.background(Color.warnSoft)
-		.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-	}
 }
