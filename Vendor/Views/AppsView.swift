@@ -83,19 +83,24 @@ struct AppsView: View {
 		}
 		.task { await model.load() }
 		.refreshable { await model.load() }
+		// Flat curve for the blur, on the screen itself rather than over the
+		// overlay: it has to reach 16 and stop. On a spring it overshoots and
+		// settles back, and the softening visibly bounces.
+		.animation(.easeInOut(duration: 0.25), value: inspecting == nil)
 		// Presented as an overlay rather than a sheet: iOS dims and shrinks the
 		// presenting view behind a sheet, and the design calls for the app
 		// list to stay visible — just blurred.
-		//
-		// No transition and no `.animation` anywhere on this screen, deliberately.
-		// The panel is nearly the size of the display, and at that size anything
-		// that eases it in reads as the window stretching rather than as it
-		// arriving. It cuts straight to its final state instead.
 		.overlay {
 			if let detail = inspecting {
 				AppDetailSheet(detail: detail) { inspecting = nil }
+					// Opacity only. A scale transition grows the panel into
+					// place, and at nearly the size of the display that reads as
+					// the window stretching rather than as it arriving. The fade
+					// is what makes it feel unhurried; the scale never was.
+					.transition(.opacity)
 			}
 		}
+		.animation(.easeInOut(duration: 0.25), value: inspecting?.id)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content — sharp chrome on top of a floating panel.
 		.toolbar(inspecting == nil ? .visible : .hidden, for: .tabBar)

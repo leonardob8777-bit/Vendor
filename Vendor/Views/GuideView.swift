@@ -37,10 +37,14 @@ struct GuideView: View {
 		.overlay {
 			if let guide = opened {
 				GuideDetailSheet(guide: guide) { opened = nil }
-					.transition(.opacity.combined(with: .scale(scale: 0.94)))
+					// Opacity only, and the same flat curve as the blur, so
+					// the panel and the softening behind it move together. The
+					// scale that used to be here grew the pane into place;
+					// every floating window fades now instead.
+					.transition(.opacity)
 			}
 		}
-		.animation(.spring(response: 0.35, dampingFraction: 0.85), value: opened?.id)
+		.animation(.easeInOut(duration: 0.25), value: opened?.id)
 		// The tab bar belongs to the TabView, so it draws above anything a tab's
 		// own content puts on screen — sharp chrome sitting on top of a panel
 		// that is meant to be floating clear of the screen. Taking it away for

@@ -48,10 +48,10 @@ struct HomeView: View {
 		.overlay {
 			if pickingLanguage {
 				LanguagePicker { pickingLanguage = false }
-					.transition(.opacity.combined(with: .scale(scale: 0.94)))
+					.transition(.opacity)
 			}
 		}
-		.animation(.spring(response: 0.32, dampingFraction: 0.86), value: pickingLanguage)
+		.animation(.easeInOut(duration: 0.25), value: pickingLanguage)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content — sharp chrome on top of a floating panel.
 		.toolbar(pickingLanguage ? .hidden : .visible, for: .tabBar)

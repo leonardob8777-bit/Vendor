@@ -98,7 +98,7 @@ struct IPAView: View {
 				calloutRow(failure)
 			}
 		}
-		.animation(.easeInOut(duration: 0.25), value: running == nil)
+		.animation(.easeInOut(duration: 0.25), value: running == nil && !showingTrustSetup)
 		.overlay {
 			if let task = running {
 				TaskProgressSheet(
@@ -110,17 +110,17 @@ struct IPAView: View {
 						: (title: t("task.openApp"), run: openInstalled),
 					cancel: cancelRunningJob
 				) { running = nil }
-					.transition(.opacity.combined(with: .scale(scale: 0.94)))
+					.transition(.opacity)
 			}
 		}
-		.animation(.spring(response: 0.35, dampingFraction: 0.85), value: running?.id)
+		.animation(.easeInOut(duration: 0.25), value: running?.id)
 		.overlay {
 			if showingTrustSetup {
 				TrustSetupSheet { showingTrustSetup = false }
-					.transition(.opacity.combined(with: .scale(scale: 0.94)))
+					.transition(.opacity)
 			}
 		}
-		.animation(.spring(response: 0.32, dampingFraction: 0.86), value: showingTrustSetup)
+		.animation(.easeInOut(duration: 0.25), value: showingTrustSetup)
 		// The tab bar is the TabView's, so it draws above whatever a tab lays
 		// over its own content. Hiding it is what stops sharp chrome sitting on
 		// top of a panel that is meant to be floating free of the screen.
