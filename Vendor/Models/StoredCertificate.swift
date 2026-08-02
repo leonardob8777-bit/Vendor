@@ -15,6 +15,11 @@ struct StoredCertificate: Identifiable, Codable, Equatable {
 	/// Team / issuer as advertised by the provisioning profile.
 	var issuer: String?
 	/// Password for the .p12. Empty when the key is not protected.
+	///
+	/// Held in memory like any other field — the signing engine takes it as a
+	/// plain string — but deliberately never written to disk. `CertificateStore`
+	/// keeps it in the keychain and fills this in after loading. See the Codable
+	/// conformance below.
 	var password: String
 	/// Expiry reported by the engine, when it could determine one.
 	var expiresAt: Date?
@@ -78,5 +83,45 @@ struct StoredCertificate: Identifiable, Codable, Equatable {
 				? t("certs.groupEnterprise")
 				: t("certs.groupDeveloper")
 		}
+	}
+}
+
+// MARK: - Codable
+
+/// Written in an extension so the memberwise initialiser survives: declaring an
+/// initialiser in the body would remove it, and every call site builds one of
+/// these field by field.
+extension StoredCertificate {
+
+	private enum CodingKeys: String, CodingKey {
+		case id, name, issuer, password, expiresAt, statusCode, statusMessage, importedAt
+	}
+
+	init(from decoder: Decoder) throws {
+		let c = try decoder.container(keyedBy: CodingKeys.self)
+		id            = try c.decode(UUID.self, forKey: .id)
+		name          = try c.decode(String.self, forKey: .name)
+		issuer        = try c.decodeIfPresent(String.self, forKey: .issuer)
+		expiresAt     = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+		statusCode    = try c.decode(Int32.self, forKey: .statusCode)
+		statusMessage = try c.decodeIfPresent(String.self, forKey: .statusMessage)
+		importedAt    = try c.decode(Date.self, forKey: .importedAt)
+
+		// Read, never written. Files created before the password moved to the
+		// keychain still carry one; the store lifts it out on load and rewrites
+		// the file without it. Anything newer simply has no such key.
+		password = try c.decodeIfPresent(String.self, forKey: .password) ?? ""
+	}
+
+	func encode(to encoder: Encoder) throws {
+		var c = encoder.container(keyedBy: CodingKeys.self)
+		try c.encode(id, forKey: .id)
+		try c.encode(name, forKey: .name)
+		try c.encodeIfPresent(issuer, forKey: .issuer)
+		try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
+		try c.encode(statusCode, forKey: .statusCode)
+		try c.encodeIfPresent(statusMessage, forKey: .statusMessage)
+		try c.encode(importedAt, forKey: .importedAt)
+		// `password` is absent on purpose. It is the one field worth stealing.
 	}
 }

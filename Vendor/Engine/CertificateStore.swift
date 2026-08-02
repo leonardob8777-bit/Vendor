@@ -3,12 +3,19 @@
 //  Vendor
 //
 //  Keeps imported signing identities on disk and asks the engine to vet them.
-//  Layout: Documents/Certificates/<uuid>/{cert.p12, profile.mobileprovision,
-//  metadata.json}
+//  Layout: Application Support/Certificates/<uuid>/{cert.p12,
+//  profile.mobileprovision, metadata.json}
+//
+//  Application Support rather than Documents because the app shares Documents
+//  over the Files app, and the `.p12` password is in the keychain rather than
+//  in metadata.json for the same reason. Neither changes anything the signing
+//  engine sees: it is still handed the password as a plain string at the moment
+//  it signs.
 //
 
 import Foundation
 import Observation
+import Security
 
 enum CertificateStoreError: LocalizedError {
 	case cannotReadPickedFile
@@ -107,8 +114,19 @@ final class CertificateStore {
 			guard folder.hasDirectoryPath,
 				  let id = UUID(uuidString: folder.lastPathComponent),
 				  let data = try? Data(contentsOf: metadataURL(for: id)),
-				  let cert = try? decoder.decode(StoredCertificate.self, from: data)
+				  var cert = try? decoder.decode(StoredCertificate.self, from: data)
 			else { return nil }
+
+			if cert.password.isEmpty {
+				// Normal path. The file never holds one, so it comes from the
+				// keychain — or is genuinely empty, for an unprotected key.
+				cert.password = password(for: id) ?? ""
+			} else {
+				// A file written before the move. Lift the password across and
+				// rewrite without it, so the plain-text copy stops existing.
+				setPassword(cert.password, for: id)
+				try? write(cert)
+			}
 			return cert
 		}
 		.sorted { $0.importedAt > $1.importedAt }
@@ -194,15 +212,67 @@ final class CertificateStore {
 	}
 
 	private func write(_ cert: StoredCertificate) throws {
+		// Password first, so a failure to write the metadata cannot leave a
+		// certificate whose key nobody can unlock.
+		setPassword(cert.password, for: cert.id)
+
 		let encoder = JSONEncoder()
 		encoder.dateEncodingStrategy = .iso8601
 		encoder.outputFormatting = .prettyPrinted
 		try encoder.encode(cert).write(to: metadataURL(for: cert.id), options: .atomic)
 	}
 
+	// MARK: Password storage
+
+	/// The `.p12` password lives here rather than beside the key.
+	///
+	/// Nothing about signing changes: the engine still receives it as a plain
+	/// string at the moment it signs. What changes is that it is no longer
+	/// written next to the file it unlocks, where a backup — or, until this was
+	/// moved out of Documents, the Files app — would hand over both together.
+	private static let passwordService = "com.leonardob8777bit.vendor.certificate-password"
+
+	private func passwordQuery(for id: UUID) -> [String: Any] {
+		[
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: Self.passwordService,
+			kSecAttrAccount as String: id.uuidString,
+		]
+	}
+
+	private func password(for id: UUID) -> String? {
+		var query = passwordQuery(for: id)
+		query[kSecReturnData as String] = true
+		query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+		var result: CFTypeRef?
+		guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+			  let data = result as? Data
+		else { return nil }
+		return String(data: data, encoding: .utf8)
+	}
+
+	private func setPassword(_ password: String, for id: UUID) {
+		let query = passwordQuery(for: id)
+		SecItemDelete(query as CFDictionary)
+
+		var add = query
+		add[kSecValueData as String] = Data(password.utf8)
+		// Readable after the first unlock rather than only while unlocked: a
+		// signing run can outlive the screen going dark, and an install holds
+		// background time deliberately.
+		add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+		SecItemAdd(add as CFDictionary, nil)
+	}
+
+	private func deletePassword(for id: UUID) {
+		SecItemDelete(passwordQuery(for: id) as CFDictionary)
+	}
+
 	// MARK: Deleting
 
 	func delete(_ cert: StoredCertificate) {
+		deletePassword(for: cert.id)
 		try? fm.removeItem(at: folder(for: cert.id))
 		certificates.removeAll { $0.id == cert.id }
 	}
