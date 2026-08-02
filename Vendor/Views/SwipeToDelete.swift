@@ -11,6 +11,14 @@ import SwiftUI
 
 struct SwipeToDelete<Content: View>: View {
 	var cornerRadius: CGFloat = 18
+	/// Whether the card can be swiped away at all.
+	///
+	/// Turned off while a card is open for editing. Two reasons, and the second
+	/// is the one that matters: a card being set up for signing is the last one
+	/// the user means to throw away, and the drag would otherwise fight every
+	/// vertical scroll through the options — the gesture claims the touch, so
+	/// trying to scroll the section arms the red panel instead.
+	var isEnabled: Bool = true
 	var onDelete: () -> Void
 	@ViewBuilder var content: () -> Content
 
@@ -31,7 +39,15 @@ struct SwipeToDelete<Content: View>: View {
 			destructivePanel
 			content()
 				.offset(x: offset)
-				.gesture(drag)
+				// `.subviews` rather than dropping the modifier: it takes this
+				// gesture out of play while leaving the buttons and fields inside
+				// the card working.
+				.gesture(drag, including: isEnabled ? .all : .subviews)
+		}
+		.onChange(of: isEnabled) { _, enabled in
+			// A card left resting open and then opened for editing would keep the
+			// red panel showing behind it with no way to put it back.
+			if !enabled { reset() }
 		}
 		// Keeps the sliding card inside its own rounded bounds instead of
 		// letting it run past the screen margin.

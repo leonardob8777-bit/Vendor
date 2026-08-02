@@ -82,8 +82,13 @@ struct IPAView: View {
 			} else {
 				ForEach(visible) { item in
 					// Same gesture the certificates use: swipe left to reveal
-					// the red panel, keep going to delete.
-					SwipeToDelete { store.delete(item) } content: {
+					// the red panel, keep going to delete. Withdrawn while the
+					// card is open — a package being prepared for signing is
+					// not one to delete by accident, and the drag would
+					// otherwise swallow every scroll through its options.
+					SwipeToDelete(isEnabled: expanded != item.id) {
+						store.delete(item)
+					} content: {
 						packageCard(item)
 					}
 				}
