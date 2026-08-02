@@ -29,9 +29,24 @@ struct GuideView: View {
 				}
 			}
 		}
-		.sheet(item: $opened) { guide in
-			GuideDetailSheet(guide: guide)
+		// Not a `.sheet`: a system sheet is presented in its own window, so the
+		// screen behind it cannot be blurred. Laying the panel over the content
+		// is what lets the guide float above a soft version of the list, the
+		// same way the install panel does.
+		.blur(radius: opened == nil ? 0 : 16)
+		.animation(.easeInOut(duration: 0.25), value: opened == nil)
+		.overlay {
+			if let guide = opened {
+				GuideDetailSheet(guide: guide) { opened = nil }
+					.transition(.opacity.combined(with: .scale(scale: 0.94)))
+			}
 		}
+		.animation(.spring(response: 0.35, dampingFraction: 0.85), value: opened?.id)
+		// The tab bar belongs to the TabView, so it draws above anything a tab's
+		// own content puts on screen — sharp chrome sitting on top of a panel
+		// that is meant to be floating clear of the screen. Taking it away for
+		// as long as the guide is open is what finishes the effect.
+		.toolbar(opened == nil ? .visible : .hidden, for: .tabBar)
 	}
 
 	private var searchField: some View {

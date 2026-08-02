@@ -240,8 +240,8 @@ struct TaskProgressSheet: View {
 
 				Button { dismiss() } label: {
 					Text(t("task.doneButton"))
-						.font(.system(size: 15, weight: .medium))
-						.foregroundStyle(Color.inkSecondary)
+						.font(.system(size: 15, weight: .semibold))
+						.foregroundStyle(Color.ok)
 				}
 			}
 		} else if let cancel, task.awaitingSystem {
@@ -255,8 +255,8 @@ struct TaskProgressSheet: View {
 			// finished job is what keeps the card square in both states.
 			Button { cancel() } label: {
 				Text(t("task.cancelButton"))
-					.font(.system(size: 15, weight: .medium))
-					.foregroundStyle(Color.inkSecondary)
+					.font(.system(size: 15, weight: .semibold))
+					.foregroundStyle(Color.bad)
 			}
 		} else {
 			Text(t("task.dontClose"))

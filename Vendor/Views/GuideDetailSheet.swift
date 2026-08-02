@@ -2,33 +2,33 @@
 //  GuideDetailSheet.swift
 //  Vendor
 //
-//  Floating help panel. The sheet background is a blur rather than a solid
-//  colour, so the screen underneath stays visible through it.
+//  Floating help panel, laid over the guide list rather than presented as a
+//  sheet — the caller blurs what is behind, so the panel reads as hovering
+//  above the screen instead of covering it.
+//
+//  Every guide gets the same pane at the same size, whatever the length of
+//  what is inside it: the generous margins are what make it read as floating,
+//  and the content scrolls within them.
 //
 
 import SwiftUI
 
 struct GuideDetailSheet: View {
-	@Environment(\.dismiss) private var dismiss
 	let guide: GuideEntry
+	/// Called when the close button is tapped, which is the only way out.
+	var dismiss: () -> Void
 
 	var body: some View {
 		ZStack {
-			// Dims what is behind just enough to keep the text readable,
-			// while leaving the screen underneath visible.
-			Color.black.opacity(0.28)
+			// Only a light veil: the blurred screen behind stays legible, the
+			// same treatment the install panel gets.
+			Color.black.opacity(0.18)
 				.ignoresSafeArea()
-				.onTapGesture { dismiss() }
 
 			panel
-				.padding(.horizontal, 12)
-				.padding(.vertical, 26)
+				.padding(.horizontal, 26)
+				.padding(.vertical, 100)
 		}
-		// A clear sheet background is what actually makes the panel float —
-		// a material here would just render as flat grey over dark content.
-		.presentationBackground(.clear)
-		.presentationDragIndicator(.hidden)
-		.presentationDetents([.large])
 	}
 
 	/// The floating pane itself.
@@ -46,6 +46,9 @@ struct GuideDetailSheet: View {
 				.padding(.top, 22)
 				.padding(.bottom, 28)
 			}
+			// A guide short enough to fit shouldn't rubber-band as though there
+			// were more below it.
+			.scrollBounceBehavior(.basedOnSize)
 
 			closeButton
 				.padding(.top, 14)

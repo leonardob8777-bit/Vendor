@@ -113,6 +113,10 @@ struct IPAView: View {
 			}
 		}
 		.animation(.spring(response: 0.32, dampingFraction: 0.86), value: showingTrustSetup)
+		// The tab bar is the TabView's, so it draws above whatever a tab lays
+		// over its own content. Hiding it is what stops sharp chrome sitting on
+		// top of a panel that is meant to be floating free of the screen.
+		.toolbar(running == nil && !showingTrustSetup ? .visible : .hidden, for: .tabBar)
 		.onChange(of: router.revealPackage) { _, _ in revealRequestedPackage() }
 		.onAppear {
 			store.reload()
