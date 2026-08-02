@@ -21,10 +21,19 @@ struct HomeView: View {
 
 	/// The identity that will actually be used to sign: the healthy one that
 	/// expires soonest, so the user sees the deadline that matters.
+	///
+	/// With nothing healthy to show, this falls back to the most recently
+	/// imported certificate instead of returning nil. Reporting "no certificate"
+	/// to someone who has one that was rejected sends them off to import it
+	/// again rather than to the reason it was refused — and it left the panel's
+	/// own rejection branch unreachable.
 	private var leadCertificate: StoredCertificate? {
 		store.certificates
 			.filter(\.isUsable)
 			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
+			.first
+		?? store.certificates
+			.sorted { $0.importedAt > $1.importedAt }
 			.first
 	}
 
@@ -84,6 +93,10 @@ struct HomeView: View {
 		.shadow(color: .black.opacity(0.38), radius: 20, y: 14)
 		.shadow(color: Color.brand.opacity(0.22), radius: 26, y: 18)
 		.padding(.bottom, 6)
+		// Decoration, and nothing else. Left visible to VoiceOver it is an
+		// unlabelled element sitting between the title and the one card on this
+		// screen that matters, with nothing to say when it is reached.
+		.accessibilityHidden(true)
 		.onAppear { isVisible = true }
 		.onDisappear { isVisible = false }
 	}
@@ -112,7 +125,7 @@ struct HomeView: View {
 			}
 
 			HStack(spacing: 16) {
-				CountdownRing(daysLeft: days, tint: tint)
+				CountdownRing(daysLeft: days, lifetimeDays: cert.lifetimeDays, tint: tint)
 					.frame(width: 76, height: 76)
 
 				VStack(alignment: .leading, spacing: 4) {
@@ -399,14 +412,19 @@ struct HomeView: View {
 	}
 }
 
-/// Ring showing how much of a year-long certificate life is left.
+/// Ring showing how much of a certificate's life is left.
 struct CountdownRing: View {
 	let daysLeft: Int
+	/// How long the certificate was good for to begin with.
+	var lifetimeDays: Int = 365
 	let tint: Color
 
-	/// Certificates are typically issued for a year; clamp so the ring stays sane.
+	/// Measured against the certificate's own span rather than a fixed year. A
+	/// free Apple ID certificate lasts seven days, and against a year it drew
+	/// itself two percent full on the day it was imported — which reads as
+	/// nearly expired when it is nothing of the sort.
 	private var fraction: Double {
-		min(max(Double(daysLeft) / 365.0, 0), 1)
+		min(max(Double(daysLeft) / Double(max(lifetimeDays, 1)), 0), 1)
 	}
 
 	var body: some View {

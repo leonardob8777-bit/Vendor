@@ -34,6 +34,33 @@ struct LoopingVideo: UIViewRepresentable {
 		view.tearDown()
 	}
 
+	/// Puts the process in an audio category that leaves everyone else alone.
+	///
+	/// This is the whole reason opening Vendor used to stop the user's music.
+	/// An app starts out in `soloAmbient`, and that category silences other
+	/// apps the moment an `AVPlayer` activates the session — it does not matter
+	/// that this clip is muted, or that it has no audio track at all. Merely
+	/// playing video was enough to cut Spotify off.
+	///
+	/// `ambient` is the category for sound that is decoration: it mixes rather
+	/// than interrupts, and it is not interrupted in turn, which is what stops
+	/// the clip freezing when music starts playing over it.
+	private static func allowOtherAudio() {
+		// Once per process. The category is global, and re-setting it on every
+		// appearance would reactivate the session for no reason.
+		guard !hasConfiguredSession else { return }
+		hasConfiguredSession = true
+		do {
+			try AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
+		} catch {
+			// Nothing to recover: the clip is silent either way, and the worst
+			// case is the behaviour that was already being shipped.
+			assertionFailure("Could not take an ambient audio session: \(error)")
+		}
+	}
+
+	private nonisolated(unsafe) static var hasConfiguredSession = false
+
 	/// A plain UIView backed by AVPlayerLayer — lighter than AVPlayerViewController,
 	/// which would drag in playback controls we do not want.
 	final class PlayerView: UIView {
@@ -51,9 +78,15 @@ struct LoopingVideo: UIViewRepresentable {
 				return
 			}
 
+			LoopingVideo.allowOtherAudio()
+
 			let item = AVPlayerItem(url: url)
 			let player = AVQueuePlayer()
 			player.isMuted = true
+			// A decorative loop is not a reason to hold the screen awake. Left at
+			// its default, sitting on Home would keep the display from dimming
+			// for as long as the app was open.
+			player.preventsDisplaySleepDuringVideoPlayback = false
 			// Never interrupt the user's music.
 			player.audiovisualBackgroundPlaybackPolicy = .pauses
 
