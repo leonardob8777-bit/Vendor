@@ -41,7 +41,15 @@ struct AppsView: View {
 	@State private var inspecting: AppDetail?
 
 	var body: some View {
-		Screen(t("tab.apps"), toolbar: AnyView(reloadButton)) {
+		Screen(
+			t("tab.apps"),
+			toolbar: AnyView(reloadButton),
+			// Through `Screen` rather than a `.blur` on the whole thing: the
+			// aurora ignores the safe area, so blurring the screen as a whole
+			// leaves the strip beside the Dynamic Island outside the blurred
+			// layer and the join reads as a black line across the top.
+			contentBlur: inspecting == nil ? 0 : 16
+		) {
 			searchField
 
 			// Pinned above the remote source so it stays first whatever the
@@ -78,6 +86,16 @@ struct AppsView: View {
 		// Presented as an overlay rather than a sheet: iOS dims and shrinks the
 		// presenting view behind a sheet, and the design calls for the app
 		// list to stay visible — just blurred.
+		.overlay {
+			if let detail = inspecting {
+				AppDetailSheet(detail: detail) { inspecting = nil }
+					.transition(.opacity.combined(with: .scale(scale: 0.94)))
+			}
+		}
+		.animation(.spring(response: 0.35, dampingFraction: 0.85), value: inspecting?.id)
+		// The tab bar is the TabView's, so it draws above anything a tab lays
+		// over its own content — sharp chrome on top of a floating panel.
+		.toolbar(inspecting == nil ? .visible : .hidden, for: .tabBar)
 	}
 
 	// MARK: Chrome

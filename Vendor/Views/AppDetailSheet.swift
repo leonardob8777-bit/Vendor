@@ -69,7 +69,6 @@ struct AppDetail: Identifiable {
 
 struct AppDetailSheet: View {
 	let detail: AppDetail
-	var onGet: () -> Void
 	var onClose: () -> Void
 
 	var body: some View {
@@ -83,9 +82,11 @@ struct AppDetailSheet: View {
 				.contentShape(Rectangle())
 				.onTapGesture(perform: onClose)
 
+			// Same margins as the guide pane, so the floating windows are one
+			// size across the app rather than each its own.
 			panel
-				.padding(.horizontal, 14)
-				.padding(.vertical, 40)
+				.padding(.horizontal, 26)
+				.padding(.vertical, 100)
 		}
 	}
 
@@ -103,6 +104,20 @@ struct AppDetailSheet: View {
 				.padding(.top, 22)
 				.padding(.bottom, 26)
 			}
+			.scrollBounceBehavior(.basedOnSize)
+			// Same fade as the guide pane: a description cut in half against the
+			// border reads as clipped rather than as scrollable.
+			.mask(
+				LinearGradient(
+					stops: [
+						.init(color: .black, location: 0),
+						.init(color: .black, location: 0.90),
+						.init(color: .black.opacity(0), location: 1),
+					],
+					startPoint: .top,
+					endPoint: .bottom
+				)
+			)
 
 			Button(action: onClose) {
 				Image(systemName: "xmark")
@@ -190,15 +205,17 @@ struct AppDetailSheet: View {
 					}
 				}
 
-				Button(action: onGet) {
-					Text(t("apps.get"))
-						.font(.system(size: 14, weight: .bold))
-						.foregroundStyle(.white)
-						.padding(.horizontal, 26)
-						.padding(.vertical, 8)
-						.background(Capsule().fill(LinearGradient.actionGet))
-						.shadow(color: Color.mint.opacity(0.40), radius: 6, y: 2)
-				}
+				// The same control the list rows use, rather than a plain Get
+				// button of this screen's own: it already carries the download
+				// ring, the hand-off to the IPA tab once the package is on the
+				// shelf, and the alert when a fetch dies. A button here that only
+				// started the download would look like nothing had happened.
+				GetButton(
+					id: detail.id,
+					downloadURL: detail.downloadURL,
+					fileName: detail.fileName,
+					bundledFile: detail.bundledFile
+				)
 				.padding(.top, 2)
 			}
 
