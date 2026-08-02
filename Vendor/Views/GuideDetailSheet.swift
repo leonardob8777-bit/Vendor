@@ -49,6 +49,20 @@ struct GuideDetailSheet: View {
 			// A guide short enough to fit shouldn't rubber-band as though there
 			// were more below it.
 			.scrollBounceBehavior(.basedOnSize)
+			// Long guides run past the bottom edge, and a line of text sliced
+			// in half by the pane's border reads as clipped rather than
+			// scrollable. Fading the last stretch says there is more below.
+			.mask(
+				LinearGradient(
+					stops: [
+						.init(color: .black, location: 0),
+						.init(color: .black, location: 0.90),
+						.init(color: .black.opacity(0), location: 1),
+					],
+					startPoint: .top,
+					endPoint: .bottom
+				)
+			)
 
 			closeButton
 				.padding(.top, 14)
