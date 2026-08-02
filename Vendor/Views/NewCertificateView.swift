@@ -68,14 +68,14 @@ struct NewCertificateView: View {
 			switch mode {
 			case .certificate:
 				guard ext == "p12" || ext == "pfx" else {
-					failure = "That is not a .p12 file."
+					failure = t("certs.notP12")
 					return
 				}
 				failure = nil
 				certificateFile = url
 			case .provision:
 				guard ext == "mobileprovision" else {
-					failure = "That is not a .mobileprovision file."
+					failure = t("certs.notProvision")
 					return
 				}
 				failure = nil
@@ -85,17 +85,6 @@ struct NewCertificateView: View {
 	}
 
 	// MARK: Actions
-
-	private func handlePick(_ result: Result<[URL], Error>, assign: (URL) -> Void) {
-		switch result {
-		case .success(let urls):
-			guard let url = urls.first else { return }
-			failure = nil
-			assign(url)
-		case .failure(let error):
-			failure = error.localizedDescription
-		}
-	}
 
 	private func save() {
 		guard let p12 = certificateFile, let provision = provisioningFile else { return }
@@ -116,7 +105,7 @@ struct NewCertificateView: View {
 				} else {
 					// Kept on screen so the password can be corrected.
 					failure = cert.statusMessage
-						?? "The engine could not use this certificate. Check the password."
+						?? t("certs.engineRefused")
 					store.delete(cert)
 				}
 			} catch {
@@ -194,16 +183,16 @@ struct NewCertificateView: View {
 				timeline
 				VStack(spacing: 10) {
 					fileRow(
-						title: "Certificate File",
-						detail: certificateFile?.lastPathComponent ?? ".p12 file required",
+						title: t("certs.certificateFile"),
+						detail: certificateFile?.lastPathComponent ?? t("certs.p12Required"),
 						glyph: "doc.text",
 						tint: .mint,
 						picked: certificateFile != nil
 					) { pick(.certificate) }
 
 					fileRow(
-						title: "Provisioning File",
-						detail: provisioningFile?.lastPathComponent ?? ".mobileprovision file required",
+						title: t("certs.provisionFile"),
+						detail: provisioningFile?.lastPathComponent ?? t("certs.provisionRequired"),
 						glyph: "doc.on.doc",
 						tint: .brand,
 						picked: provisioningFile != nil
@@ -279,7 +268,7 @@ struct NewCertificateView: View {
 						if revealPassword {
 							TextField(t("certs.password"), text: $password)
 						} else {
-							SecureField("Password (Optional)", text: $password)
+							SecureField(t("certs.password"), text: $password)
 						}
 					}
 					.font(.system(size: 15))

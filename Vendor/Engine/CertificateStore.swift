@@ -179,7 +179,7 @@ final class CertificateStore {
 			id: id,
 			name: nickname?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
 				?? profile?.name
-				?? "Certificate",
+				?? t("certs.defaultName"),
 			issuer: profile?.teamName,
 			password: password,
 			expiresAt: status.expiresAt ?? profile?.expirationDate,

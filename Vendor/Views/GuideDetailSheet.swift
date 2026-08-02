@@ -118,7 +118,7 @@ struct GuideDetailSheet: View {
 				.foregroundStyle(Color.inkPrimary)
 				.glassCircle(size: 34)
 		}
-		.accessibilityLabel("Close")
+		.accessibilityLabel(t("common.close"))
 	}
 
 	private var header: some View {

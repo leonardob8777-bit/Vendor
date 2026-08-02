@@ -65,7 +65,7 @@ struct CertificatesView: View {
 					.font(.system(size: 15, weight: .semibold))
 					.foregroundStyle(Color.inkPrimary)
 					.lineLimit(1)
-				Text(item.issuer ?? "Unknown team")
+				Text(item.issuer ?? t("certs.unknownTeam"))
 					.font(.system(size: 12))
 					.foregroundStyle(Color.inkSecondary)
 					.lineLimit(1)

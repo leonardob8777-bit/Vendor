@@ -62,7 +62,7 @@ struct StoredCertificate: Identifiable, Codable, Equatable {
 
 	func health(now: Date = Date()) -> Health {
 		guard isUsable else {
-			return .rejected(statusMessage ?? "Rejected by the signing engine")
+			return .rejected(statusMessage ?? t("certs.rejectedByEngine"))
 		}
 		guard let expiresAt else {
 			return .valid(daysLeft: 0)

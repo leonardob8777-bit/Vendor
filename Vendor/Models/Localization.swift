@@ -306,7 +306,34 @@ enum Strings {
 		),
 		"certs.save":       (en: "Save",     es: "Guardar"),
 		"certs.password":   (en: "Password", es: "Contraseña"),
+		"common.close":     (en: "Close",    es: "Cerrar"),
+		"guide.search":     (en: "Search guides...", es: "Buscar guías..."),
 		"certs.nickname":   (en: "Nickname", es: "Apodo"),
+		"certs.certificateFile": (en: "Certificate File",   es: "Archivo de certificado"),
+		"certs.provisionFile":   (en: "Provisioning File",  es: "Archivo de aprovisionamiento"),
+		"certs.p12Required":     (en: ".p12 file required", es: "Falta el archivo .p12"),
+		"certs.provisionRequired": (
+			en: ".mobileprovision file required",
+			es: "Falta el archivo .mobileprovision"
+		),
+		"certs.notP12": (
+			en: "That is not a .p12 file.",
+			es: "Ese archivo no es un .p12."
+		),
+		"certs.notProvision": (
+			en: "That is not a .mobileprovision file.",
+			es: "Ese archivo no es un .mobileprovision."
+		),
+		"certs.engineRefused": (
+			en: "The engine could not use this certificate. Check the password.",
+			es: "El motor no pudo usar este certificado. Revisa la contraseña."
+		),
+		"certs.unknownTeam":  (en: "Unknown team",  es: "Equipo desconocido"),
+		"certs.defaultName":  (en: "Certificate",   es: "Certificado"),
+		"certs.rejectedByEngine": (
+			en: "Rejected by the signing engine",
+			es: "Rechazado por el motor de firma"
+		),
 		"certs.none":       (en: "None",     es: "Ninguno"),
 		"certs.groupRevoked":    (en: "Revoked",    es: "Revocados"),
 		"certs.groupDeveloper":  (en: "Developer",  es: "Desarrollador"),

@@ -57,7 +57,7 @@ struct GuideView: View {
 			Image(systemName: "magnifyingglass")
 				.font(.system(size: 13, weight: .semibold))
 				.foregroundStyle(Color.inkSecondary)
-			TextField("Search guides...", text: $query)
+			TextField(t("guide.search"), text: $query)
 				.font(.system(size: 14))
 				.foregroundStyle(Color.inkPrimary)
 				.autocorrectionDisabled()
