@@ -174,7 +174,7 @@ enum PEM {
 
 	/// Pulls the RSAPrivateKey out of a PKCS#8 PrivateKeyInfo.
 	private static func unwrapPKCS8(_ der: Data) -> Data? {
-		var bytes = [UInt8](der)
+		let bytes = [UInt8](der)
 		var index = 0
 
 		func readLength() -> Int? {
