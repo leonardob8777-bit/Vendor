@@ -48,7 +48,11 @@ struct GuideDetailSheet: View {
 				VStack(alignment: .leading, spacing: 16) {
 					header
 
-					ForEach(guide.blocks) { block in
+					// Indexed rather than by the block's own id, which is built
+					// from its text: two headings reading the same thing — and
+					// "Steps" is an obvious candidate — would hand ForEach a
+					// repeated id. Position cannot collide.
+					ForEach(Array(guide.blocks.enumerated()), id: \.offset) { _, block in
 						view(for: block)
 					}
 				}

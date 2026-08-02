@@ -37,6 +37,28 @@ enum GuideBlock: Identifiable {
 		case .warning(let t):   return "w\(t)"
 		}
 	}
+
+	/// Everything inside this block that somebody might search for.
+	var searchText: String {
+		switch self {
+		case .heading(let t), .paragraph(let t), .note(let t), .warning(let t):
+			return t
+		case .steps(let items):
+			return items.joined(separator: " ")
+		}
+	}
+}
+
+extension GuideEntry {
+	/// Title, subtitle and every word of the body.
+	///
+	/// The search field used to look at the first two only, which meant the one
+	/// place a reader goes when they are stuck could not find the sentence they
+	/// were stuck on. Searching "kravasign" or "Developer Mode" returned
+	/// nothing, though both are in the text.
+	var searchText: String {
+		([title, detail] + blocks.map(\.searchText)).joined(separator: " ")
+	}
 }
 
 enum GuideContent {
