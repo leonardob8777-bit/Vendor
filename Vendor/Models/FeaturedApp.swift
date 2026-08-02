@@ -24,6 +24,9 @@ struct FeaturedApp: Identifiable {
 	/// Package shipped inside Vendor, for apps that are not hosted anywhere.
 	/// When set, Get copies it straight into Imported instead of downloading.
 	var bundledFile: String? = nil
+	/// Listed but not yet downloadable. The row shows a Soon chip where the Get
+	/// button would be, rather than a button that fetches something missing.
+	var comingSoon: Bool = false
 	let downloadURL: URL
 	/// Bytes, when known.
 	let size: Int64?
@@ -99,6 +102,7 @@ extension FeaturedApp {
 		glow: .gold,
 		iconURL: nil,
 		iconAsset: "FFDSIcon",
+		comingSoon: true,
 		downloadURL: URL(string: "https://leonardob8777-bit.github.io/apps/FF_Darksword_crack.ipa")!,
 		size: 1_843_116,
 		version: "1.5.2"
@@ -113,6 +117,7 @@ extension FeaturedApp {
 		glow: .gold,
 		iconURL: nil,
 		iconAsset: "TurboMaxIcon",
+		comingSoon: true,
 		downloadURL: URL(string: "https://leonardob8777-bit.github.io/apps/turbomax.ipa")!,
 		size: 17_051_987,
 		version: "1.0"

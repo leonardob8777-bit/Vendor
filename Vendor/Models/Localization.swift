@@ -162,6 +162,11 @@ enum Strings {
 		"apps.noMatches":   (en: "No matches",          es: "Sin resultados"),
 		"apps.search":      (en: "Search apps...",      es: "Buscar apps..."),
 		"apps.get":         (en: "Get",                 es: "Obtener"),
+		"apps.soon":        (en: "SOON",                es: "PRONTO"),
+		"apps.soonDetail":  (
+			en: "Not available to download yet.",
+			es: "Todavía no se puede descargar."
+		),
 		"apps.source":      (en: "Source",              es: "Fuente"),
 		"apps.downloadFailed": (en: "Download failed",  es: "Falló la descarga"),
 		"apps.cancelDownload": (en: "Cancel download",  es: "Cancelar descarga"),

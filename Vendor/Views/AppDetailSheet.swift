@@ -25,6 +25,8 @@ struct AppDetail: Identifiable {
 	var iconAsset: String? = nil
 	/// Package shipped inside Vendor, when there is one.
 	var bundledFile: String? = nil
+	/// Listed but not downloadable yet.
+	var comingSoon: Bool = false
 	let screenshots: [URL]
 	let badges: [(text: String, kind: SiteBadge.Kind)]
 	let downloadURL: URL?
@@ -62,6 +64,7 @@ struct AppDetail: Identifiable {
 		bundledFile = app.bundledFile
 		screenshots = []
 		badges = app.badges
+		comingSoon = app.comingSoon
 		downloadURL = app.downloadURL
 		fileName = app.downloadURL.lastPathComponent
 	}
@@ -217,18 +220,32 @@ struct AppDetailSheet: View {
 					}
 				}
 
-				// The same control the list rows use, rather than a plain Get
-				// button of this screen's own: it already carries the download
-				// ring, the hand-off to the IPA tab once the package is on the
-				// shelf, and the alert when a fetch dies. A button here that only
-				// started the download would look like nothing had happened.
-				GetButton(
-					id: detail.id,
-					downloadURL: detail.downloadURL,
-					fileName: detail.fileName,
-					bundledFile: detail.bundledFile
-				)
-				.padding(.top, 2)
+				if detail.comingSoon {
+					// Same as the row: nothing to fetch, so nothing that looks
+					// like it would. With the room this screen has, it can also
+					// say why in words.
+					VStack(alignment: .leading, spacing: 5) {
+						SiteBadge(text: t("apps.soon"), kind: .soon)
+						Text(t("apps.soonDetail"))
+							.font(.system(size: 11))
+							.foregroundStyle(Color.inkSecondary)
+							.fixedSize(horizontal: false, vertical: true)
+					}
+					.padding(.top, 2)
+				} else {
+					// The same control the list rows use, rather than a plain Get
+					// button of this screen's own: it already carries the download
+					// ring, the hand-off to the IPA tab once the package is on the
+					// shelf, and the alert when a fetch dies. A button here that
+					// only started the download would look like nothing happened.
+					GetButton(
+						id: detail.id,
+						downloadURL: detail.downloadURL,
+						fileName: detail.fileName,
+						bundledFile: detail.bundledFile
+					)
+					.padding(.top, 2)
+				}
 			}
 
 			Spacer(minLength: 0)

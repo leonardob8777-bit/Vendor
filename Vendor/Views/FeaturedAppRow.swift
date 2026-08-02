@@ -50,12 +50,19 @@ struct FeaturedAppRow: View {
 			Spacer(minLength: 8)
 
 			VStack(alignment: .trailing, spacing: 5) {
-				GetButton(
-					id: app.id,
-					downloadURL: app.downloadURL,
-					fileName: app.downloadURL.lastPathComponent,
-					bundledFile: app.bundledFile
-				)
+				// A Get button on something that cannot be fetched yet is a
+				// button that fails when tapped. The chip says the same thing
+				// and promises nothing.
+				if app.comingSoon {
+					SiteBadge(text: t("apps.soon"), kind: .soon)
+				} else {
+					GetButton(
+						id: app.id,
+						downloadURL: app.downloadURL,
+						fileName: app.downloadURL.lastPathComponent,
+						bundledFile: app.bundledFile
+					)
+				}
 
 				HStack(spacing: 4) {
 					if let version = app.version {

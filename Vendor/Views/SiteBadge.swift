@@ -11,7 +11,7 @@ import SwiftUI
 
 struct SiteBadge: View {
 	enum Kind {
-		case hot, ultra, live, new, popular, verified, epic
+		case hot, ultra, live, new, popular, verified, epic, soon
 
 		/// Values lifted straight from the site's stylesheet.
 		var ink: Color {
@@ -23,6 +23,7 @@ struct SiteBadge: View {
 			case .popular:  return Color(red: 0.94, green: 0.67, blue: 0.99) // #f0abfc
 			case .verified: return Color(red: 0.49, green: 0.83, blue: 0.99) // #7dd3fc
 			case .epic:     return Color(red: 1.00, green: 0.88, blue: 0.55) // pale gold
+			case .soon:     return Color(red: 0.99, green: 0.83, blue: 0.50) // amber, as on the site
 			}
 		}
 
@@ -36,6 +37,7 @@ struct SiteBadge: View {
 			case .popular:  return Color(red: 0.91, green: 0.47, blue: 0.98)
 			case .verified: return Color(red: 0.22, green: 0.74, blue: 0.97)
 			case .epic:     return Color(red: 0.85, green: 0.65, blue: 0.13) // deep gold
+			case .soon:     return Color(red: 0.85, green: 0.60, blue: 0.11)
 			}
 		}
 	}
