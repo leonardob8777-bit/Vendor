@@ -526,6 +526,59 @@ enum Strings {
 			es: "%@ no contiene ningún tweak que inyectar."
 		),
 
+		// Getting a certificate. Written against the route this app actually
+		// documents — a UDID-locked certificate bought from KravaSign — rather
+		// than the Apple ID / paid-account ladder the guide used to describe,
+		// which is not how anyone here gets one.
+		"guide.cert.title":  (en: "How to get a certificate", es: "Cómo conseguir un certificado"),
+		"guide.cert.detail": (
+			en: "Your UDID, the purchase, and the three things it gives you",
+			es: "Tu UDID, la compra y las tres cosas que te da"
+		),
+		"guide.cert.p1": (
+			en: "iOS only runs apps signed by an identity it recognises, and a certificate is that identity. It is tied to one device: the UDID you hand over when buying it decides which phone it will work on, and it will not work on any other.",
+			es: "iOS solo ejecuta apps firmadas por una identidad que reconoce, y el certificado es esa identidad. Va atado a un dispositivo: el UDID que entregas al comprarlo decide en qué teléfono funcionará, y no servirá en ningún otro."
+		),
+		"guide.cert.h1": (en: "Get your UDID", es: "Consigue tu UDID"),
+		"guide.cert.s1": (
+			en: "Open udid.tech in Safari, on the same iPhone you are going to install on.",
+			es: "Abre udid.tech en Safari, en el mismo iPhone donde vas a instalar."
+		),
+		"guide.cert.s2": (
+			en: "Follow the steps it shows and copy the code it gives you at the end.",
+			es: "Sigue los pasos que te muestra y copia el código que te da al final."
+		),
+		"guide.cert.note1": (
+			en: "Do this on the device itself. A UDID taken from another phone produces a certificate that signs without complaint and then refuses to install.",
+			es: "Hazlo desde el propio dispositivo. Un UDID sacado de otro teléfono produce un certificado que firma sin quejarse y luego se niega a instalar."
+		),
+		"guide.cert.h2": (en: "Buy the certificate", es: "Compra el certificado"),
+		"guide.cert.s3": (
+			en: "Go to kravasign.com/purchase and paste the UDID you just copied.",
+			es: "Entra en kravasign.com/purchase y pega el UDID que acabas de copiar."
+		),
+		"guide.cert.s4": (
+			en: "Complete the purchase. You get back a .p12 file, a .mobileprovision profile and a password.",
+			es: "Completa la compra. Recibes un archivo .p12, un perfil .mobileprovision y una contraseña."
+		),
+		"guide.cert.s5": (
+			en: "Keep all three. Without the password the .p12 cannot be opened, and it is not something you can recover afterwards.",
+			es: "Guarda las tres cosas. Sin la contraseña el .p12 no se puede abrir, y no es algo que puedas recuperar después."
+		),
+		"guide.cert.h3": (en: "Import it into Vendor", es: "Impórtalo en Vendor"),
+		"guide.cert.s6": (
+			en: "Certificates tab, then New certificate. Pick the .p12 and the .mobileprovision, and type the password you were given.",
+			es: "Pestaña Certificados y luego Nuevo certificado. Elige el .p12 y el .mobileprovision, y escribe la contraseña que te dieron."
+		),
+		"guide.cert.s7": (
+			en: "Vendor asks the engine to check the pair before saving it. If it comes back rejected, the password is the usual reason.",
+			es: "Vendor le pide al motor que compruebe el par antes de guardarlo. Si vuelve rechazado, la contraseña suele ser el motivo."
+		),
+		"guide.cert.warn": (
+			en: "A certificate belongs to the UDID it was bought with. Changing phone means buying another one — the same files will not sign for a different device.",
+			es: "Un certificado pertenece al UDID con el que se compró. Cambiar de teléfono implica comprar otro: los mismos archivos no firmarán para un dispositivo distinto."
+		),
+
 		"guide.install.title":  (en: "How to install apps", es: "Cómo instalar apps"),
 		"guide.install.detail": (
 			en: "From certificate to a working app on your Home Screen",
@@ -537,8 +590,8 @@ enum Strings {
 		),
 		"guide.install.h1": (en: "Before you start", es: "Antes de empezar"),
 		"guide.install.s1": (
-			en: "Import a signing identity: a .p12 private key and its matching .mobileprovision profile.",
-			es: "Importa una identidad de firma: una clave privada .p12 y su perfil .mobileprovision correspondiente."
+			en: "Have a certificate imported: a .p12 key, its .mobileprovision profile and the password. The certificate guide covers how to get them.",
+			es: "Ten un certificado importado: una clave .p12, su perfil .mobileprovision y la contraseña. La guía de certificado explica cómo conseguirlos."
 		),
 		"guide.install.s2": (
 			en: "Check the Home screen — the certificate must show days remaining, not Expired or Rejected.",
@@ -620,13 +673,16 @@ enum Strings {
 		),
 		"guide.refresh.h1": (en: "How long you get", es: "Cuánto tiempo tienes"),
 		"guide.refresh.s1": (
-			en: "Free Apple ID: 7 days. Up to 3 apps at once, and about 10 new app IDs per 7 days.",
-			es: "Apple ID gratuito: 7 días. Hasta 3 apps a la vez, y unos 10 identificadores nuevos cada 7 días."
+			en: "The Home screen counts down whatever the certificate you imported is good for.",
+			es: "La pantalla de inicio descuenta el tiempo que dure el certificado que hayas importado."
 		),
-		"guide.refresh.s2": (en: "Paid developer account: 1 year.", es: "Cuenta de desarrollador de pago: 1 año."),
+		"guide.refresh.s2": (
+			en: "It can also stop working before that date. Apple revokes certificates it catches signing apps for the public, and a revoked one dies the same day.",
+			es: "También puede dejar de funcionar antes de esa fecha. Apple revoca los certificados que pilla firmando apps para el público, y uno revocado muere ese mismo día."
+		),
 		"guide.refresh.s3": (
-			en: "Enterprise certificate: 1 year, but Apple can revoke it at any time.",
-			es: "Certificado empresarial: 1 año, pero Apple puede revocarlo en cualquier momento."
+			en: "Either way the fix is the same: get a working certificate and sign the app again.",
+			es: "En cualquiera de los dos casos la solución es la misma: consigue un certificado que funcione y vuelve a firmar la app."
 		),
 		"guide.refresh.h2": (en: "Refreshing", es: "Renovar"),
 		"guide.refresh.s4": (
@@ -642,8 +698,8 @@ enum Strings {
 			es: "Instala encima de la app existente: tus datos se conservan."
 		),
 		"guide.refresh.note": (
-			en: "Vendor turns the counter amber below 30 days so the deadline does not take you by surprise.",
-			es: "Vendor pone el contador en ámbar por debajo de 30 días para que la fecha no te pille por sorpresa."
+			en: "Vendor turns the counter amber in the last third of a certificate's life, so a short one warns you in its final days rather than from the moment it arrives.",
+			es: "Vendor pone el contador en ámbar en el último tercio de la vida del certificado, así uno corto avisa en sus últimos días en vez de desde que llega."
 		),
 		"guide.refresh.warn": (
 			en: "If the app stopped working before its expiry date, the certificate was probably revoked rather than expired. Re-signing with the same certificate will not help; you need a different one.",
@@ -667,18 +723,18 @@ enum Strings {
 		),
 		"guide.faq.h3": (en: "Do my certificates leave the phone?", es: "¿Mis certificados salen del teléfono?"),
 		"guide.faq.p3": (
-			en: "No. Signing runs on the device. Your .p12 and its password are stored in Vendor's own folder and are never uploaded. Vendor has no account system and collects no analytics.",
-			es: "No. La firma se ejecuta en el dispositivo. Tu .p12 y su contraseña se guardan en la carpeta propia de Vendor y nunca se suben. Vendor no tiene sistema de cuentas ni recoge analíticas."
+			en: "No. Signing runs on the device. The .p12 sits in Vendor's own private folder, its password is held in the iOS keychain rather than beside it, and neither is ever uploaded. Vendor has no account system and collects no analytics.",
+			es: "No. La firma se ejecuta en el dispositivo. El .p12 está en la carpeta privada de Vendor, su contraseña vive en el llavero de iOS y no junto a él, y ninguno de los dos se sube nunca. Vendor no tiene sistema de cuentas ni recoge analíticas."
 		),
 		"guide.faq.h4": (en: "Can I get this from the App Store?", es: "¿Puedo conseguir esto en la App Store?"),
 		"guide.faq.p4": (
 			en: "No. Apple does not allow apps that install other apps, so tools like this are distributed as signed .ipa files instead.",
 			es: "No. Apple no permite apps que instalen otras apps, así que herramientas como esta se distribuyen como archivos .ipa firmados."
 		),
-		"guide.faq.h5": (en: "Is a free Apple ID enough?", es: "¿Basta con un Apple ID gratuito?"),
+		"guide.faq.h5": (en: "Why buy a certificate?", es: "¿Por qué comprar un certificado?"),
 		"guide.faq.p5": (
-			en: "For personal use, yes — with 7-day signatures and a 3-app ceiling. Anything beyond that needs a paid developer account or an enterprise certificate.",
-			es: "Para uso personal, sí: con firmas de 7 días y un tope de 3 apps. Cualquier cosa más allá requiere una cuenta de desarrollador de pago o un certificado empresarial."
+			en: "A free Apple ID signs for seven days at a time and stops at three apps, so it means coming back every week. A bought certificate is what avoids that. Vendor signs with either — the difference is how often you have to do it again.",
+			es: "Un Apple ID gratuito firma de siete en siete días y se queda en tres apps, así que obliga a volver cada semana. Un certificado comprado es lo que evita eso. Vendor firma con cualquiera de los dos: la diferencia es cada cuánto tienes que repetirlo."
 		),
 		"guide.faq.warn": (
 			en: "Vendor is not affiliated with Apple Inc. Sideloading is at your own risk.",

@@ -40,7 +40,42 @@ enum GuideBlock: Identifiable {
 }
 
 enum GuideContent {
-	static var all: [GuideEntry] { [installing, trusting, refreshing, faq] }
+	/// Getting a certificate comes first because nothing else works without one.
+	static var all: [GuideEntry] { [certificate, installing, trusting, refreshing, faq] }
+
+	// MARK: Certificate
+
+	static var certificate: GuideEntry { GuideEntry(
+		id: "certificate",
+		title: t("guide.cert.title"),
+		detail: t("guide.cert.detail"),
+		glyph: "person.badge.key",
+		blocks: [
+			.paragraph(t("guide.cert.p1")),
+
+			.heading(t("guide.cert.h1")),
+			.steps([
+				t("guide.cert.s1"),
+				t("guide.cert.s2"),
+			]),
+			.note(t("guide.cert.note1")),
+
+			.heading(t("guide.cert.h2")),
+			.steps([
+				t("guide.cert.s3"),
+				t("guide.cert.s4"),
+				t("guide.cert.s5"),
+			]),
+
+			.heading(t("guide.cert.h3")),
+			.steps([
+				t("guide.cert.s6"),
+				t("guide.cert.s7"),
+			]),
+
+			.warning(t("guide.cert.warn")),
+		]
+	) }
 
 	// MARK: Installing
 
