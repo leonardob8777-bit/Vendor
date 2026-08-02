@@ -47,10 +47,21 @@ struct FaceGlyph: View {
 		.clipShape(Circle())
 	}
 
-	/// A flat mouth sits higher than a curved one, which needs room to bow.
+	/// Placed so all three mouths share a visual centre.
+	///
+	/// The offset positions the frame, but the ink inside it sits differently
+	/// per mood: a smile's ends are at the top of its frame and it bows down
+	/// from them, a frown does the opposite, and a flat mouth fills neither.
+	/// Offsetting all three the same way put the smile's corners about three and
+	/// a half points from the eyes while the other two had room to breathe — it
+	/// read as crowded, because it was.
+	///
+	/// Measured at 44 pt: smile ends 4.8 below centre and bows to 11.9, giving a
+	/// midpoint of 8.4 — the same place the flat mouth sits and the same place a
+	/// frown's arc centres on.
 	private var mouthOffset: CGFloat {
 		switch mood {
-		case .happy:   return size * 0.13
+		case .happy:   return size * 0.21
 		case .neutral: return size * 0.19
 		case .sad:     return size * 0.17
 		}

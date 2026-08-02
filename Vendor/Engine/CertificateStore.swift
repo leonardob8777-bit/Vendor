@@ -32,15 +32,56 @@ final class CertificateStore {
 
 	private let fm = FileManager.default
 
+	/// Application Support, not Documents.
+	///
+	/// Vendor ships with `UIFileSharingEnabled`, so everything under Documents is
+	/// browsable from the Files app and over iTunes/Finder. That is wanted for
+	/// packages — dropping an .ipa in is how people use it — but the same switch
+	/// was putting `cert.p12` and a `metadata.json` holding its password in
+	/// plain text one tap away from anyone holding the phone. The Home screen
+	/// promises these never leave the device; they were sitting in a folder made
+	/// for taking things off it.
 	private var root: URL {
-		let url = URL.documentsDirectory.appendingPathComponent("Certificates", isDirectory: true)
+		let url = URL.applicationSupportDirectory.appendingPathComponent("Certificates", isDirectory: true)
 		if !fm.fileExists(atPath: url.path) {
 			try? fm.createDirectory(at: url, withIntermediateDirectories: true)
 		}
 		return url
 	}
 
-	private init() { reload() }
+	private init() {
+		migrateOutOfDocuments()
+		reload()
+	}
+
+	/// Moves certificates filed before they had somewhere private to live.
+	///
+	/// Runs once: the old folder is removed after its contents have been moved,
+	/// so a later launch finds nothing to do. An entry that somehow exists in
+	/// both places is left alone rather than overwritten — the newer location is
+	/// the one in use.
+	private func migrateOutOfDocuments() {
+		let old = URL.documentsDirectory.appendingPathComponent("Certificates", isDirectory: true)
+		guard fm.fileExists(atPath: old.path) else { return }
+
+		let destination = root
+		if let entries = try? fm.contentsOfDirectory(at: old, includingPropertiesForKeys: nil) {
+			for entry in entries {
+				let target = destination.appendingPathComponent(entry.lastPathComponent)
+				guard !fm.fileExists(atPath: target.path) else { continue }
+				try? fm.moveItem(at: entry, to: target)
+			}
+		}
+
+		// Only once there is nothing left. Removing the old folder regardless
+		// would delete any certificate whose move failed — and a signing
+		// identity is not something to lose to a tidy-up. Left in place, the
+		// next launch tries again.
+		let leftovers = (try? fm.contentsOfDirectory(atPath: old.path)) ?? []
+		if leftovers.isEmpty {
+			try? fm.removeItem(at: old)
+		}
+	}
 
 	// MARK: Paths
 
