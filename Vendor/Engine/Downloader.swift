@@ -91,7 +91,10 @@ final class Downloader {
 			guard let self else { return }
 			defer { self.finish(id, token: token) }
 			do {
-				self.progress[id] = 0.4
+				// Full, not part way. There is nothing to fetch, so the only work
+				// is filing it — and a ring frozen at 40% for the whole of that
+				// reads as a download that stalled.
+				self.progress[id] = 1
 				try await IPAStore.shared.importPackage(from: source, sourceID: id)
 			} catch {
 				self.failures[id] = error.localizedDescription

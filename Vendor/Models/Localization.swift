@@ -248,6 +248,10 @@ enum Strings {
 			en: "Only %@ free — signing this needs about %@.",
 			es: "Solo quedan %@ libres — firmar esto necesita unos %@."
 		),
+		"err.store.notAPackage": (
+			en: "That file is not an .ipa. The download probably returned an error page instead of the app.",
+			es: "Ese archivo no es un .ipa. La descarga probablemente devolvió una página de error en vez de la app."
+		),
 		"err.install.simulator": (
 			en: "The simulator cannot install apps — itms-services only exists on a real device. Run this on your iPhone.",
 			es: "El simulador no puede instalar apps: itms-services solo existe en un dispositivo real. Pruébalo en tu iPhone."

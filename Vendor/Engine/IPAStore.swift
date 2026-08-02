@@ -173,6 +173,16 @@ final class IPAStore {
 				throw IPAStoreError.cannotWrite(error.localizedDescription)
 			}
 
+			// An .ipa is a zip archive. A download that came back as a 404 page,
+			// a rate-limit notice or a login redirect is none of those, and
+			// without this it landed on the shelf looking like a package — the
+			// user only finding out at signing time, through an error about a
+			// missing payload that says nothing about the cause.
+			guard Self.looksLikeArchive(package) else {
+				try? fm.removeItem(at: dir)
+				throw IPAStoreError.wrongType(t("err.store.notAPackage"))
+			}
+
 			let size = (try? fm.attributesOfItem(atPath: package.path)[.size] as? Int64) ?? 0
 
 			// Read the bundle's own name, version and icon out of the package,
@@ -343,6 +353,19 @@ final class IPAStore {
 				}
 			}
 		}
+	}
+
+	/// Whether the file starts with a zip signature.
+	///
+	/// Only the first four bytes: enough to tell an archive from a web page, and
+	/// it costs nothing on a package that may run to hundreds of megabytes.
+	private nonisolated static func looksLikeArchive(_ url: URL) -> Bool {
+		guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+		defer { try? handle.close() }
+		guard let head = try? handle.read(upToCount: 4), head.count == 4 else { return false }
+		// "PK", then the local-file, central-directory or spanned marker.
+		return head[0] == 0x50 && head[1] == 0x4B
+			&& (head[2] == 0x03 || head[2] == 0x05 || head[2] == 0x07)
 	}
 
 	private func write(_ item: ImportedIPA) throws {
