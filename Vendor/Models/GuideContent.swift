@@ -63,7 +63,52 @@ extension GuideEntry {
 
 enum GuideContent {
 	/// Getting a certificate comes first because nothing else works without one.
-	static var all: [GuideEntry] { [certificate, installing, trusting, refreshing, faq] }
+	static var all: [GuideEntry] {
+		[certificate, installing, trusting, refreshing, faq, acknowledgements]
+	}
+
+	// MARK: Acknowledgements
+
+	/// The licences Vendor is obliged to carry.
+	///
+	/// MIT and Apache 2.0 both require the copyright notice and the licence text
+	/// to travel with anything built on them. Shipping without this is fine
+	/// while the build never leaves the machine it was made on, and stops being
+	/// fine the moment it is handed to somebody else.
+	///
+	/// The texts are read from the bundle rather than typed into the string
+	/// table on purpose: they have to be verbatim, and they must not be
+	/// translated — a licence in Spanish is not the licence that was granted.
+	static var acknowledgements: GuideEntry { GuideEntry(
+		id: "acknowledgements",
+		title: t("guide.thanks.title"),
+		detail: t("guide.thanks.detail"),
+		glyph: "text.document",
+		blocks: [.paragraph(t("guide.thanks.p1"))] + credits.flatMap { credit in
+			[
+				.heading("\(credit.name) — \(credit.licence)"),
+				.paragraph(licenceText(credit.file)),
+			]
+		}
+	) }
+
+	private static let credits: [(name: String, licence: String, file: String)] = [
+		("Zsign",      "MIT",            "Zsign"),
+		("IDeviceKit", "MIT",            "IDeviceKit"),
+		("OpenSSL",    "Apache-2.0",     "OpenSSL"),
+	]
+
+	private static func licenceText(_ name: String) -> String {
+		guard let url = Bundle.main.url(forResource: name, withExtension: "txt"),
+			  let text = try? String(contentsOf: url, encoding: .utf8)
+		else {
+			// Louder than a blank space: a missing licence file is a packaging
+			// mistake that has to be noticed before the build is handed out.
+			assertionFailure("Missing bundled licence for \(name)")
+			return "\(name): licence text missing from this build."
+		}
+		return text.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
 
 	// MARK: Certificate
 

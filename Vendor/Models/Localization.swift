@@ -345,6 +345,15 @@ enum Strings {
 		"certs.password":   (en: "Password", es: "Contraseña"),
 		"common.close":     (en: "Close",    es: "Cerrar"),
 		"guide.search":     (en: "Search guides...", es: "Buscar guías..."),
+		"guide.thanks.title":  (en: "Open source licences", es: "Licencias de código abierto"),
+		"guide.thanks.detail": (
+			en: "What Vendor is built on, and the terms it carries",
+			es: "Sobre qué está construido Vendor y los términos que lleva"
+		),
+		"guide.thanks.p1": (
+			en: "Signing runs on the engine below, not on anything Vendor wrote itself. Each of these is used under its own licence, reproduced in full — that is what the licences ask for, and it is why they travel with every copy of the app.",
+			es: "La firma la ejecuta el motor de abajo, no algo escrito por Vendor. Cada uno de estos se usa bajo su propia licencia, reproducida íntegra: es lo que las licencias exigen, y por eso viajan con cada copia de la app."
+		),
 		"guide.noMatches":  (en: "No matching guide", es: "Ninguna guía coincide"),
 		"certs.nickname":   (en: "Nickname", es: "Apodo"),
 		"certs.certificateFile": (en: "Certificate File",   es: "Archivo de certificado"),
