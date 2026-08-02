@@ -45,6 +45,8 @@ struct IPAView: View {
 	@State private var expanded: UUID?
 	@State private var shelf: Shelf = .all
 	@State private var running: AppTask?
+	/// The job the panel is showing, kept so it can be called off.
+	@State private var job: Task<Void, Never>?
 	@State private var failure: String?
 	@State private var busy = false
 	@State private var installer = Installer.shared
@@ -97,7 +99,8 @@ struct IPAView: View {
 					// that silently does nothing is worse than no button.
 					primaryAction: lastSigned?.urlScheme == nil
 						? nil
-						: (title: t("task.openApp"), run: openInstalled)
+						: (title: t("task.openApp"), run: openInstalled),
+					cancel: cancelRunningJob
 				) { running = nil }
 					.transition(.opacity.combined(with: .scale(scale: 0.94)))
 			}
@@ -262,7 +265,7 @@ struct IPAView: View {
 		signedFile = nil
 		lastSigned = nil
 
-		Task {
+		job = Task {
 			let destination = store.signedURL(for: item)
 			let signed: ImportedIPA
 
@@ -315,7 +318,7 @@ struct IPAView: View {
 		lastSigned = item
 		signedFile = store.signedURL(for: item)
 
-		Task {
+		job = Task {
 			do {
 				try await handOff(item, task: task)
 			} catch {
@@ -325,6 +328,16 @@ struct IPAView: View {
 		}
 	}
 
+	/// Gives up on the job the panel is showing. Offered only while it waits on
+	/// iOS's own prompt, where stopping costs nothing: the signature is already
+	/// on disk and the install is the system's to run or refuse.
+	private func cancelRunningJob() {
+		job?.cancel()
+		job = nil
+		installer.abort()
+		running = nil
+	}
+
 	/// Hands the package to iOS and holds the bar until the system has taken
 	/// it. There is no completion callback from installd, so the signal is the
 	/// user coming back to Vendor once the system prompt is answered.
@@ -332,13 +345,17 @@ struct IPAView: View {
 		task.advance(to: .installing, fraction: 0.15)
 		try await installer.install(store.signedURL(for: item), item: item)
 
+		// Waiting on the system prompt is its own state: the bar has nothing to
+		// count while iOS holds the screen, and a ring that simply stopped read
+		// as a hang.
+		task.awaitingSystem = true
 		task.advance(to: .installing, fraction: 0.55)
-		await installer.waitForReturn()
+		defer { task.awaitingSystem = false }
 
 		// Coming back to Vendor is not the same as having said yes: Cancel
 		// returns here just as Install does. Only a package that installd
 		// actually pulled means the prompt was accepted.
-		guard await installer.packageWasFetched() else {
+		guard await installer.awaitOutcome() == .accepted else {
 			throw InstallerError.cancelled
 		}
 

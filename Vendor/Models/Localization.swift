@@ -262,6 +262,11 @@ enum Strings {
 		"task.keepOpen":    (en: "Please keep Vendor open.", es: "Mantén Vendor abierto."),
 		"task.dontClose":   (en: "Don't close the app",      es: "No cierres la app"),
 		"task.doneButton":  (en: "Done",        es: "Hecho"),
+		"task.cancelButton": (en: "Cancel",     es: "Cancelar"),
+		"task.confirmPrompt": (
+			en: "Confirm the install in the iOS prompt.",
+			es: "Confirma la instalación en el aviso de iOS."
+		),
 
 		// Guide
 

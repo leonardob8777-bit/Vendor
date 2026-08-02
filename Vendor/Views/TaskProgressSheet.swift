@@ -50,6 +50,10 @@ final class AppTask: Identifiable {
 	var stage: Stage
 	/// 0…1 within the current stage.
 	var fraction: Double = 0
+	/// True while the job is parked on something outside the app — iOS's own
+	/// install prompt. There is no progress to report during it, and the panel
+	/// says so instead of showing a bar that has quietly stopped moving.
+	var awaitingSystem = false
 	var failure: String?
 	/// Headline shown once the job lands.
 	var completionTitle = "Done"
@@ -99,6 +103,9 @@ struct TaskProgressSheet: View {
 	@Bindable var task: AppTask
 	/// Offered once the job lands, when the caller has a follow-up to suggest.
 	var primaryAction: (title: String, run: () -> Void)?
+	/// Called to give up on a job that is still running. Without it the panel
+	/// is a dead end whenever the thing it waits on never arrives.
+	var cancel: (() -> Void)?
 	/// Called when the panel should go away.
 	var dismiss: () -> Void
 
@@ -139,10 +146,19 @@ struct TaskProgressSheet: View {
 			.padding(.horizontal, 8)
 
 			if task.failure == nil && task.stage != .done {
-				Text("\(Int(task.overall * 100))%")
-					.font(.system(size: 15, weight: .bold))
-					.foregroundStyle(Color.inkPrimary)
-					.monospacedDigit()
+				// A percentage that sits still for as long as the user takes to
+				// answer iOS looks like a hang. Nothing is being counted during
+				// that wait, so nothing is claimed.
+				if task.awaitingSystem {
+					ProgressView()
+						.progressViewStyle(.circular)
+						.tint(Color.inkSecondary)
+				} else {
+					Text("\(Int(task.overall * 100))%")
+						.font(.system(size: 15, weight: .bold))
+						.foregroundStyle(Color.inkPrimary)
+						.monospacedDigit()
+				}
 			}
 
 			footer
@@ -190,6 +206,10 @@ struct TaskProgressSheet: View {
 		if task.stage == .done {
 			return task.completionDetail ?? "\(task.appName) is ready."
 		}
+		// While iOS owns the screen, saying "keep Vendor open" is no help — the
+		// user is looking at a system prompt and needs to know it is theirs to
+		// answer.
+		if task.awaitingSystem { return t("task.confirmPrompt") }
 		return t("task.keepOpen")
 	}
 
@@ -223,6 +243,20 @@ struct TaskProgressSheet: View {
 						.font(.system(size: 15, weight: .medium))
 						.foregroundStyle(Color.inkSecondary)
 				}
+			}
+		} else if let cancel, task.awaitingSystem {
+			// The way out, offered only while the job waits on iOS — the one
+			// stretch where Vendor is not doing the work and giving up costs
+			// nothing, and exactly where a dismissed prompt used to leave the
+			// panel with no way off the screen.
+			//
+			// Telling the user not to close the app would be the wrong thing to
+			// say beside it, and the same plain style as the dismiss button on a
+			// finished job is what keeps the card square in both states.
+			Button { cancel() } label: {
+				Text(t("task.cancelButton"))
+					.font(.system(size: 15, weight: .medium))
+					.foregroundStyle(Color.inkSecondary)
 			}
 		} else {
 			Text(t("task.dontClose"))

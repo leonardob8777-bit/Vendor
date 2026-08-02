@@ -177,41 +177,70 @@ final class Installer {
 		}
 	}
 
-	/// Waits for Vendor to come back to the foreground, which is the only
-	/// signal available that the system prompt has been answered — installd
-	/// reports nothing back to the app that asked.
-	func waitForReturn(timeout: Duration = .seconds(90)) async {
-		let notifications = NotificationCenter.default.notifications(
-			named: UIApplication.didBecomeActiveNotification
-		)
-
-		await withTaskGroup(of: Void.self) { group in
-			group.addTask {
-				for await _ in notifications { break }
-			}
-			group.addTask {
-				try? await Task.sleep(for: timeout)
-			}
-			await group.next()
-			group.cancelAll()
-		}
+	/// How the system prompt was answered, as far as it can be told.
+	enum Outcome {
+		case accepted
+		case cancelled
 	}
 
-	/// Whether installd came back for the package after showing its prompt.
+	/// Waits for the user to answer iOS's install prompt.
 	///
-	/// Tapping Cancel returns to Vendor exactly like tapping Install does, and
-	/// installd never reports either way — so returning to the app was being
-	/// read as success and a cancelled install was announced as a finished one.
-	/// The payload request is the honest signal. It is given a few seconds of
-	/// grace because installd starts the transfer a moment after the tap, and a
-	/// user who switches straight back would otherwise beat it to it.
-	func packageWasFetched(within timeout: Duration = .seconds(8)) async -> Bool {
-		let deadline = ContinuousClock.now.advanced(by: timeout)
+	/// installd reports nothing back to the app that asked, so both signals are
+	/// indirect: it fetches the manifest to draw its prompt, and only comes back
+	/// for the package if the user taps Install. Cancel returns to Vendor
+	/// exactly like Install does, so being at the front again proves nothing on
+	/// its own — the request for the package is the honest signal.
+	///
+	/// This polls the application state rather than waiting on
+	/// `didBecomeActive`. That notification is a single shot, and it fires while
+	/// the caller is still on its way to listening for it: a cancelled install
+	/// missed it and then sat through the entire timeout, leaving a progress
+	/// panel that looked frozen for a minute and a half.
+	func awaitOutcome(timeout: Duration = .seconds(180)) async -> Outcome {
+		let start = ContinuousClock.now
+		let deadline = start.advanced(by: timeout)
+		/// The prompt is a system alert, so Vendor stops being the active app
+		/// while it is up. Coming back only counts once it has gone away.
+		var wasInterrupted = false
+		var returnedAt: ContinuousClock.Instant?
+
 		while ContinuousClock.now < deadline {
-			if server.wasRequested("/app.ipa") { return true }
-			try? await Task.sleep(for: .milliseconds(250))
+			if server.wasRequested("/app.ipa") { return .accepted }
+			if Task.isCancelled { return .cancelled }
+
+			if UIApplication.shared.applicationState == .active {
+				if wasInterrupted, returnedAt == nil { returnedAt = ContinuousClock.now }
+			} else {
+				wasInterrupted = true
+				returnedAt = nil
+			}
+
+			// Back in front, prompt gone, package never asked for: it was
+			// dismissed. The grace covers installd beginning its transfer a
+			// moment after the tap, which a quick user would otherwise beat.
+			if let returnedAt, returnedAt.duration(to: .now) > .seconds(4) {
+				return .cancelled
+			}
+
+			// The prompt never appeared at all: if installd had engaged it would
+			// have read the manifest by now. Nothing is coming.
+			if !wasInterrupted,
+			   start.duration(to: .now) > .seconds(12),
+			   !server.wasRequested("/manifest.plist") {
+				return .cancelled
+			}
+
+			try? await Task.sleep(for: .milliseconds(200))
 		}
-		return server.wasRequested("/app.ipa")
+		return .cancelled
+	}
+
+	/// Gives up on an install in flight: stops serving and hands back the
+	/// background time. Whatever iOS is showing is iOS's to dismiss; this only
+	/// stops Vendor waiting on it.
+	func abort() {
+		shutdown?.cancel()
+		finishServing()
 	}
 
 	// MARK: Manifest
