@@ -1,0 +1,412 @@
+//
+//  Installer.swift
+//  Vendor
+//
+//  Installs a signed .ipa onto this device.
+//
+//  iOS has exactly one route for this outside the App Store: hand `installd` an
+//  `itms-services://` URL pointing at a manifest it can fetch over HTTPS. So the
+//  work here is to stand up that HTTPS endpoint locally, describe the package in
+//  a manifest, and hand the URL to the system.
+//
+//  The one-time cost is trust: the device has to accept Vendor's own authority
+//  before it will talk to the local server. `authorityInstalled` tracks that,
+//  and `authorityURL` is what the setup screen opens.
+//
+
+import Foundation
+import Security
+import UIKit
+import Observation
+
+enum InstallerError: LocalizedError {
+	case noSignedBuild
+	case noBundleIdentifier
+	case authorityNotTrusted
+	case systemRefused
+	case cancelled
+
+	var errorDescription: String? {
+		switch self {
+		case .noSignedBuild:      return t("err.install.noBuild")
+		case .noBundleIdentifier: return t("err.install.noBundleID")
+		case .authorityNotTrusted: return t("err.install.notTrusted")
+		case .systemRefused:      return t("err.install.refused")
+		case .cancelled:          return t("err.install.cancelled")
+		}
+	}
+}
+
+@Observable
+@MainActor
+final class Installer {
+	static let shared = Installer()
+
+	/// Set once the user has installed and trusted Vendor's authority.
+	var authorityInstalled: Bool {
+		didSet { UserDefaults.standard.set(authorityInstalled, forKey: Self.trustKey) }
+	}
+
+	private static let trustKey = "vendor.authority.installed"
+	private static let keyTag = "com.leonardob8777bit.vendor.local-tls"
+	/// Bumped whenever the certificate's shape changes. A stored pair from an
+	/// older format is thrown away rather than served, since the old one may be
+	/// exactly why installing stopped working.
+	private static let formatVersion = 2
+	private static let versionKey = "vendor.authority.format"
+
+	private let server = InstallServer()
+	/// Identity and host resolved ahead of time by `prepare()`.
+	private var readyIdentity: (identity: SecIdentity, host: String)?
+	/// Held open until the install finishes; installd fetches asynchronously.
+	private var shutdown: Task<Void, Never>?
+	/// Background time keeping the listener answering while Vendor sits behind
+	/// the system's install prompt. `.invalid` when none is held.
+	private var backgroundToken: UIBackgroundTaskIdentifier = .invalid
+
+	private init() {
+		authorityInstalled = UserDefaults.standard.bool(forKey: Self.trustKey)
+	}
+
+	// MARK: Trust setup
+
+	/// Writes the authority to disk and returns a URL the user can open to
+	/// install it. iOS only offers the "Install Profile" flow for a certificate
+	/// it is handed directly, which is why this goes through a file rather than
+	/// the local server.
+	func authorityFile() throws -> URL {
+		let identity = try ensureIdentity()
+		let url = URL.temporaryDirectory.appendingPathComponent("Vendor-Authority.cer")
+		try identity.authorityDER.write(to: url, options: .atomic)
+		return url
+	}
+
+	/// Warms the install path so tapping Install is immediate: the certificate
+	/// is fetched, and the identity it forms is built and cached.
+	func prepare() async {
+		guard readyIdentity == nil else { return }
+		guard let pack = try? await ServerPackStore.current() else { return }
+		readyIdentity = publicIdentity(from: pack).map { ($0, pack.host) }
+	}
+
+	// MARK: Installing
+
+	/// Serves `package` and asks iOS to install it.
+	func install(_ package: URL, item: ImportedIPA) async throws {
+		guard FileManager.default.fileExists(atPath: package.path) else {
+			throw InstallerError.noSignedBuild
+		}
+		guard let bundleID = item.bundleIdentifier else {
+			throw InstallerError.noBundleIdentifier
+		}
+		shutdown?.cancel()
+		finishServing()
+		server.forgetRequests()
+
+		// Preferred path: a publicly trusted certificate for a host that
+		// resolves to this device. iOS accepts it with no setup, which is what
+		// makes installing a single tap.
+		let host: String
+		if readyIdentity == nil { await prepare() }
+
+		if let ready = readyIdentity {
+			host = ready.host
+			try await server.start(identity: ready.identity)
+		} else {
+			// Offline, or the pack has gone away: fall back to the certificate
+			// Vendor mints itself, which needs the one-time trust step.
+			guard authorityInstalled else { throw InstallerError.authorityNotTrusted }
+			host = LocalCertificate.host
+			let stored = try ensureIdentity()
+			try await server.start(identity: try keychainIdentity(for: stored))
+		}
+
+		let manifest = try writeManifest(
+			for: item,
+			bundleID: bundleID,
+			packageURL: "https://\(host):\(server.port)/app.ipa"
+		)
+
+		server.serve(package, at: "/app.ipa", mime: "application/octet-stream")
+		server.serve(manifest, at: "/manifest.plist", mime: "text/xml")
+
+		let install = URL(
+			string: "itms-services://?action=download-manifest&url="
+				+ "https://\(host):\(server.port)/manifest.plist"
+		)!
+
+		// Opening this URL sends Vendor to the background, and a backgrounded app
+		// is suspended within seconds — taking the listener with it. installd
+		// then finds nothing on the port and reports that it cannot connect.
+		// Asking for background time is what keeps the server answering.
+		backgroundToken = UIApplication.shared.beginBackgroundTask(withName: "vendor.install") {
+			// Ending the task here is not optional: an expiration handler that
+			// returns without giving the time back gets the app killed outright.
+			Task { @MainActor in self.finishServing() }
+		}
+
+		guard await UIApplication.shared.open(install) else {
+			finishServing()
+			throw InstallerError.systemRefused
+		}
+
+		// installd fetches the manifest, draws its prompt, and only comes back
+		// for the package once the user has said yes — and that second fetch is
+		// the whole package. A fixed timer used to close the listener at 25
+		// seconds regardless, which cut long installs off mid-transfer. Waiting
+		// for the package to actually go out is the honest end of the job.
+		shutdown = Task { [weak self, server] in
+			let deadline = ContinuousClock.now.advanced(by: .seconds(240))
+			while ContinuousClock.now < deadline, !Task.isCancelled {
+				if server.wasDelivered("/app.ipa") { break }
+				try? await Task.sleep(for: .milliseconds(400))
+			}
+			// A breath of slack so installd closes the connection on its terms.
+			try? await Task.sleep(for: .seconds(2))
+			self?.finishServing()
+		}
+	}
+
+	/// Stops serving and gives the background time back, however the install
+	/// ended. Safe to call more than once.
+	private func finishServing() {
+		server.stop()
+		if backgroundToken != .invalid {
+			UIApplication.shared.endBackgroundTask(backgroundToken)
+			backgroundToken = .invalid
+		}
+	}
+
+	/// Waits for Vendor to come back to the foreground, which is the only
+	/// signal available that the system prompt has been answered — installd
+	/// reports nothing back to the app that asked.
+	func waitForReturn(timeout: Duration = .seconds(90)) async {
+		let notifications = NotificationCenter.default.notifications(
+			named: UIApplication.didBecomeActiveNotification
+		)
+
+		await withTaskGroup(of: Void.self) { group in
+			group.addTask {
+				for await _ in notifications { break }
+			}
+			group.addTask {
+				try? await Task.sleep(for: timeout)
+			}
+			await group.next()
+			group.cancelAll()
+		}
+	}
+
+	/// Whether installd came back for the package after showing its prompt.
+	///
+	/// Tapping Cancel returns to Vendor exactly like tapping Install does, and
+	/// installd never reports either way — so returning to the app was being
+	/// read as success and a cancelled install was announced as a finished one.
+	/// The payload request is the honest signal. It is given a few seconds of
+	/// grace because installd starts the transfer a moment after the tap, and a
+	/// user who switches straight back would otherwise beat it to it.
+	func packageWasFetched(within timeout: Duration = .seconds(8)) async -> Bool {
+		let deadline = ContinuousClock.now.advanced(by: timeout)
+		while ContinuousClock.now < deadline {
+			if server.wasRequested("/app.ipa") { return true }
+			try? await Task.sleep(for: .milliseconds(250))
+		}
+		return server.wasRequested("/app.ipa")
+	}
+
+	// MARK: Manifest
+
+	private func writeManifest(
+		for item: ImportedIPA,
+		bundleID: String,
+		packageURL: String
+	) throws -> URL {
+		let manifest: [String: Any] = [
+			"items": [[
+				"assets": [[
+					"kind": "software-package",
+					"url": packageURL,
+				]],
+				"metadata": [
+					"bundle-identifier": bundleID,
+					"bundle-version": item.version ?? "1.0",
+					"kind": "software",
+					"title": item.name,
+				],
+			]]
+		]
+
+		let data = try PropertyListSerialization.data(
+			fromPropertyList: manifest,
+			format: .xml,
+			options: 0
+		)
+		let url = URL.temporaryDirectory.appendingPathComponent("manifest.plist")
+		try data.write(to: url, options: .atomic)
+		return url
+	}
+
+	/// Files the downloaded certificate and key, then asks the keychain for the
+	/// identity they form together.
+	private func publicIdentity(from pack: ServerPack) -> SecIdentity? {
+		let chain = PEM.certificates(in: pack.certificatePEM)
+		guard let leaf = chain.first,
+			  let key = PEM.privateKey(in: pack.keyPEM)
+		else { return nil }
+
+		let label = Self.keyTag + ".public"
+
+		let keyQuery: [String: Any] = [
+			kSecClass as String: kSecClassKey,
+			kSecAttrApplicationTag as String: Data(label.utf8),
+		]
+		SecItemDelete(keyQuery as CFDictionary)
+		var keyAdd = keyQuery
+		keyAdd[kSecValueRef as String] = key
+		SecItemAdd(keyAdd as CFDictionary, nil)
+
+		let certQuery: [String: Any] = [
+			kSecClass as String: kSecClassCertificate,
+			kSecAttrLabel as String: label,
+		]
+		SecItemDelete(certQuery as CFDictionary)
+		var certAdd = certQuery
+		certAdd[kSecValueRef as String] = leaf
+		SecItemAdd(certAdd as CFDictionary, nil)
+
+		var result: CFTypeRef?
+		let query: [String: Any] = [
+			kSecClass as String: kSecClassIdentity,
+			kSecAttrLabel as String: label,
+			kSecReturnRef as String: true,
+		]
+		guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+			  let identity = result
+		else { return nil }
+
+		return (identity as! SecIdentity)
+	}
+
+	// MARK: Identity storage
+
+	/// Generates the pair on first use and keeps it in the keychain thereafter,
+	/// so the authority the user trusted stays the one the server presents.
+	private func ensureIdentity() throws -> GeneratedIdentity {
+		let stored = UserDefaults.standard.integer(forKey: Self.versionKey)
+		if stored == Self.formatVersion, let existing = loadIdentity() {
+			return existing
+		}
+
+		let generated = try LocalCertificate.generate()
+		try store(generated)
+		UserDefaults.standard.set(Self.formatVersion, forKey: Self.versionKey)
+		// A new authority is a different authority: whatever the device trusted
+		// before no longer matches, so the setup has to be done again.
+		if stored != 0 && stored != Self.formatVersion {
+			authorityInstalled = false
+		}
+		return generated
+	}
+
+	private func loadIdentity() -> GeneratedIdentity? {
+		guard let authority = readData(account: "authority"),
+			  let leaf = readData(account: "leaf"),
+			  let key = readKey()
+		else { return nil }
+		return GeneratedIdentity(authorityDER: authority, leafDER: leaf, leafKey: key)
+	}
+
+	private func store(_ identity: GeneratedIdentity) throws {
+		write(identity.authorityDER, account: "authority")
+		write(identity.leafDER, account: "leaf")
+
+		// The key is stored as a key item so SecIdentity can pair it with the
+		// certificate later.
+		let attributes: [String: Any] = [
+			kSecClass as String: kSecClassKey,
+			kSecAttrApplicationTag as String: Data(Self.keyTag.utf8),
+			kSecValueRef as String: identity.leafKey,
+		]
+		SecItemDelete(attributes as CFDictionary)
+		SecItemAdd(attributes as CFDictionary, nil)
+	}
+
+	/// Pairs the stored certificate with its key to get something TLS accepts.
+	///
+	/// iOS has no `SecIdentityCreateWithCertificate` — that is macOS only. The
+	/// keychain forms the identity itself once the certificate and its matching
+	/// private key are both filed, so the job here is to put them in and ask
+	/// for the result back.
+	private func keychainIdentity(for stored: GeneratedIdentity) throws -> SecIdentity {
+		guard let certificate = SecCertificateCreateWithData(nil, stored.leafDER as CFData) else {
+			throw LocalCertificateError.identity
+		}
+
+		let label = Self.keyTag
+		let add: [String: Any] = [
+			kSecClass as String: kSecClassCertificate,
+			kSecAttrLabel as String: label,
+			kSecValueRef as String: certificate,
+		]
+		SecItemDelete([
+			kSecClass as String: kSecClassCertificate,
+			kSecAttrLabel as String: label,
+		] as CFDictionary)
+		SecItemAdd(add as CFDictionary, nil)
+
+		let query: [String: Any] = [
+			kSecClass as String: kSecClassIdentity,
+			kSecAttrLabel as String: label,
+			kSecReturnRef as String: true,
+		]
+		var result: CFTypeRef?
+		guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+			  let identity = result
+		else { throw LocalCertificateError.identity }
+
+		return (identity as! SecIdentity)
+	}
+
+	// MARK: Keychain helpers
+
+	private func write(_ data: Data, account: String) {
+		let query: [String: Any] = [
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: Self.keyTag,
+			kSecAttrAccount as String: account,
+		]
+		SecItemDelete(query as CFDictionary)
+
+		var insert = query
+		insert[kSecValueData as String] = data
+		SecItemAdd(insert as CFDictionary, nil)
+	}
+
+	private func readData(account: String) -> Data? {
+		let query: [String: Any] = [
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: Self.keyTag,
+			kSecAttrAccount as String: account,
+			kSecReturnData as String: true,
+		]
+		var result: CFTypeRef?
+		guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else {
+			return nil
+		}
+		return result as? Data
+	}
+
+	private func readKey() -> SecKey? {
+		let query: [String: Any] = [
+			kSecClass as String: kSecClassKey,
+			kSecAttrApplicationTag as String: Data(Self.keyTag.utf8),
+			kSecReturnRef as String: true,
+		]
+		var result: CFTypeRef?
+		guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else {
+			return nil
+		}
+		// SecKey is a CF type; the cast is safe because the query asked for a ref.
+		return (result as! SecKey?)
+	}
+}

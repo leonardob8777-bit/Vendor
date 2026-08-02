@@ -1,0 +1,152 @@
+//
+//  RootTabView.swift
+//  Vendor
+//
+
+import SwiftUI
+
+struct RootTabView: View {
+	enum Tab: Hashable {
+		case home, apps, ipa, certificates, guide
+
+		var title: String {
+			switch self {
+			case .home:         return t("tab.home")
+			case .apps:         return t("tab.apps")
+			case .ipa:          return t("tab.ipa")
+			case .certificates: return t("tab.certificates")
+			case .guide:        return t("tab.guide")
+			}
+		}
+
+		/// Outline symbols with simple geometry — the filled variants read as
+		/// heavy blobs at tab-bar size.
+		var glyph: String {
+			switch self {
+			case .home:         return "house"
+			case .apps:         return "cube"
+			case .ipa:          return "doc.zipper"
+			case .certificates: return "shield"
+			case .guide:        return "book"
+			}
+		}
+	}
+
+	@State private var router = Router.shared
+
+	init() {
+		// The tab bar sizes itself from its item metrics, so a larger label
+		// font and roomier icon insets grow the whole bar.
+		let item = UITabBarItemAppearance()
+		let title: [NSAttributedString.Key: Any] = [
+			.font: UIFont.systemFont(ofSize: 12, weight: .semibold)
+		]
+		item.normal.titleTextAttributes = title
+		item.selected.titleTextAttributes = title
+		item.normal.iconColor = UIColor(Color.inkPrimary)
+
+		for layout in [item.normal, item.selected] {
+			layout.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 2)
+		}
+
+		let appearance = UITabBarAppearance()
+		appearance.configureWithDefaultBackground()
+		appearance.stackedLayoutAppearance = item
+		appearance.inlineLayoutAppearance = item
+		appearance.compactInlineLayoutAppearance = item
+
+		UITabBar.appearance().standardAppearance = appearance
+		UITabBar.appearance().scrollEdgeAppearance = appearance
+	}
+
+	var body: some View {
+		TabView(selection: $router.tab) {
+			// Home can jump to the other tabs, so it takes the selection.
+			HomeView(tab: $router.tab).tag(Tab.home)
+				.tabItem { tabLabel(.home) }
+
+			AppsView().tag(Tab.apps)
+				.tabItem { tabLabel(.apps) }
+
+			IPAView().tag(Tab.ipa)
+				.tabItem { tabLabel(.ipa) }
+
+			CertificatesView().tag(Tab.certificates)
+				.tabItem { tabLabel(.certificates) }
+
+			GuideView().tag(Tab.guide)
+				.tabItem { tabLabel(.guide) }
+		}
+		.tint(.brand)
+	}
+
+	/// iOS substitutes the `.fill` variant for tab symbols unless the label
+	/// itself opts out, which is what undoes the thin-line look.
+	private func tabLabel(_ tab: Tab) -> some View {
+		Label(tab.title, systemImage: tab.glyph)
+			.environment(\.symbolVariants, .none)
+			.imageScale(.large)
+	}
+}
+
+// MARK: - Shared chrome
+
+/// Standard screen scaffold. The title is drawn as content rather than as a
+/// navigation title — that matches the design and avoids the large empty
+/// header strip a `navigationTitle` reserves.
+struct Screen<Content: View>: View {
+	let title: String
+	var toolbar: AnyView?
+	@ViewBuilder var content: () -> Content
+
+	init(_ title: String, toolbar: AnyView? = nil, @ViewBuilder content: @escaping () -> Content) {
+		self.title = title
+		self.toolbar = toolbar
+		self.content = content
+	}
+
+	var body: some View {
+		ScrollView {
+			VStack(spacing: 12) {
+				HStack(alignment: .center) {
+					Text(title)
+						.font(.system(size: 28, weight: .bold))
+						.foregroundStyle(Color.inkPrimary)
+					Spacer(minLength: 8)
+					toolbar
+				}
+				.padding(.bottom, 2)
+
+				content()
+			}
+			.padding(.horizontal, 16)
+			.padding(.top, 6)
+			// Clears the floating tab bar, which otherwise overlaps and
+			// shows the last card through its material.
+			.padding(.bottom, 96)
+		}
+		.auroraBackground()
+	}
+}
+
+/// Rounded tile that holds a glyph, used down the left edge of most rows.
+struct GlyphTile: View {
+	let systemName: String
+	var tint: Color = .brand
+	var size: CGFloat = 40
+
+	var body: some View {
+		Image(systemName: systemName)
+			// Light stroke and a slightly larger glyph: reads as a line icon
+			// rather than a solid badge.
+			.font(.system(size: size * 0.46, weight: .light))
+			.foregroundStyle(tint)
+			.frame(width: size, height: size)
+			.background(tint.opacity(0.10))
+			.overlay(
+				RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+					.strokeBorder(tint.opacity(0.16), lineWidth: 0.8)
+			)
+			.clipShape(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+	}
+}

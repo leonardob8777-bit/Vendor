@@ -1,0 +1,233 @@
+//
+//  TaskProgressSheet.swift
+//  Vendor
+//
+//  Shown while an app is fetched, unpacked, signed and installed. The bar and
+//  the badge share one gradient that travels green → purple, so the colour
+//  itself tracks how far along the pipeline the job is.
+//
+
+import SwiftUI
+
+/// One job moving through the pipeline.
+@Observable
+final class AppTask: Identifiable {
+	let id = UUID()
+
+	enum Stage: Int, CaseIterable {
+		case downloading, extracting, signing, packaging, installing, done
+
+		var title: String {
+			switch self {
+			case .downloading: return t("task.downloading")
+			case .extracting:  return t("task.unpacking")
+			case .signing:     return t("task.signing")
+			case .packaging:   return t("task.packaging")
+			case .installing:  return t("task.installing")
+			case .done:        return t("task.done")
+			}
+		}
+
+		var glyph: String {
+			switch self {
+			case .downloading: return "arrow.down"
+			case .extracting:  return "shippingbox"
+			case .signing:     return "signature"
+			case .packaging:   return "shippingbox.and.arrow.backward"
+			case .installing:  return "iphone"
+			case .done:        return "checkmark"
+			}
+		}
+	}
+
+	let appName: String
+	/// Icon shown inside the ring.
+	let iconURL: URL?
+	/// Stages this particular job passes through. Signing an already-imported
+	/// package skips the download, and the bar should reach 100% at the end of
+	/// the work that actually runs rather than at three quarters.
+	let stages: [Stage]
+	var stage: Stage
+	/// 0…1 within the current stage.
+	var fraction: Double = 0
+	var failure: String?
+	/// Headline shown once the job lands.
+	var completionTitle = "Done"
+	var completionDetail: String?
+
+	init(
+		appName: String,
+		iconURL: URL? = nil,
+		stages: [Stage] = Stage.allCases
+	) {
+		self.appName = appName
+		self.iconURL = iconURL
+		self.stages = stages
+		self.stage = stages.first ?? .downloading
+	}
+
+	/// Overall progress across this job's stages, which is what the ring shows.
+	var overall: Double {
+		guard let index = stages.firstIndex(of: stage), stages.count > 1 else { return 0 }
+		let steps = Double(stages.count - 1)
+		return min((Double(index) + fraction) / steps, 1)
+	}
+
+	var isFinished: Bool { stage == .done || failure != nil }
+
+	@MainActor
+	func advance(to stage: Stage, fraction: Double) {
+		self.stage = stage
+		self.fraction = fraction
+	}
+
+	@MainActor
+	func finish(title: String, detail: String?) {
+		completionTitle = title
+		completionDetail = detail
+		stage = .done
+		fraction = 1
+	}
+
+	@MainActor
+	func fail(_ message: String) {
+		failure = message
+	}
+}
+
+struct TaskProgressSheet: View {
+	@Bindable var task: AppTask
+	/// Offered once the job lands, when the caller has a follow-up to suggest.
+	var primaryAction: (title: String, run: () -> Void)?
+	/// Called when the panel should go away.
+	var dismiss: () -> Void
+
+	var body: some View {
+		ZStack {
+			// Only a light veil: the app list stays legible behind the panel,
+			// blurred by the panel's own material rather than hidden.
+			Color.black.opacity(0.18)
+				.ignoresSafeArea()
+
+			panel
+				.padding(.horizontal, 26)
+		}
+	}
+
+	/// Square floating card, same glass treatment as the Home panels.
+	private var panel: some View {
+		VStack(spacing: 16) {
+			InstallRing(
+				progress: task.overall,
+				iconURL: task.iconURL,
+				diameter: 132,
+				failed: task.failure != nil
+			)
+
+			VStack(spacing: 6) {
+				Text(headline)
+					.font(.system(size: 18, weight: .bold))
+					.foregroundStyle(Color.inkPrimary)
+					.multilineTextAlignment(.center)
+
+				Text(subtitle)
+					.font(.system(size: 13))
+					.foregroundStyle(Color.inkSecondary)
+					.multilineTextAlignment(.center)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+			.padding(.horizontal, 8)
+
+			if task.failure == nil && task.stage != .done {
+				Text("\(Int(task.overall * 100))%")
+					.font(.system(size: 15, weight: .bold))
+					.foregroundStyle(Color.inkPrimary)
+					.monospacedDigit()
+			}
+
+			footer
+		}
+		.padding(20)
+		.frame(maxWidth: .infinity)
+		.aspectRatio(1, contentMode: .fit)
+		.background {
+			ZStack {
+				RoundedRectangle(cornerRadius: 30, style: .continuous)
+					.fill(.ultraThinMaterial)
+
+				RoundedRectangle(cornerRadius: 30, style: .continuous)
+					.fill(
+						LinearGradient(
+							colors: [Color.brand.opacity(0.13), Color.mint.opacity(0.07)],
+							startPoint: .topLeading, endPoint: .bottomTrailing
+						)
+					)
+
+				RoundedRectangle(cornerRadius: 30, style: .continuous)
+					.strokeBorder(
+						LinearGradient(
+							colors: [.white.opacity(0.30), .white.opacity(0.05), Color.mint.opacity(0.18)],
+							startPoint: .topLeading, endPoint: .bottomTrailing
+						),
+						lineWidth: 1
+					)
+			}
+		}
+		.clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+		.shadow(color: .black.opacity(0.45), radius: 30, y: 16)
+		.shadow(color: Color.brand.opacity(0.22), radius: 36, y: 20)
+	}
+
+	// MARK: Copy
+
+	private var headline: String {
+		if task.failure != nil { return t("task.failed") }
+		return task.stage == .done ? task.completionTitle : "\(task.stage.title) \(task.appName)"
+	}
+
+	private var subtitle: String {
+		if let failure = task.failure { return failure }
+		if task.stage == .done {
+			return task.completionDetail ?? "\(task.appName) is ready."
+		}
+		return t("task.keepOpen")
+	}
+
+
+
+
+	/// Small dots showing which stages are behind, current, and still ahead.
+
+	// MARK: Footer
+
+	@ViewBuilder
+	private var footer: some View {
+		if task.isFinished {
+			VStack(spacing: 12) {
+				if task.stage == .done, let action = primaryAction {
+					Button {
+						action.run()
+					} label: {
+						Text(action.title)
+							.font(.system(size: 15, weight: .semibold))
+							.foregroundStyle(.white)
+							.frame(maxWidth: .infinity)
+							.padding(.vertical, 12)
+							.background(Capsule().fill(LinearGradient.actionFlow))
+							.shadow(color: Color.brand.opacity(0.4), radius: 12, y: 4)
+					}
+				}
+
+				Button { dismiss() } label: {
+					Text(t("task.doneButton"))
+						.font(.system(size: 15, weight: .medium))
+						.foregroundStyle(Color.inkSecondary)
+				}
+			}
+		} else {
+			Text(t("task.dontClose"))
+				.font(.system(size: 12))
+				.foregroundStyle(Color.inkSecondary)
+		}
+	}
+}

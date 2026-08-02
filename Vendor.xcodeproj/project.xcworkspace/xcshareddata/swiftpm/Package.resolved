@@ -1,0 +1,31 @@
+{
+  "originHash" : "04c30a61bb28310d263e20e5141bdc64adce09561c38c86fe278dd1192579c06",
+  "pins" : [
+    {
+      "identity" : "idevicekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/khcrysalis/IDeviceKit",
+      "state" : {
+        "revision" : "837cf1e14d4875771dd5ee1b754a4c86215c5db3"
+      }
+    },
+    {
+      "identity" : "openssl",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/OpenSSL",
+      "state" : {
+        "revision" : "4b1188ba947ddc23d03b13096b9e44b804e146c9",
+        "version" : "3.6.3000"
+      }
+    },
+    {
+      "identity" : "zsign-package",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/khcrysalis/Zsign-Package",
+      "state" : {
+        "revision" : "6ffe703df73ef9069adacdbb19d571f11a69a801"
+      }
+    }
+  ],
+  "version" : 3
+}
