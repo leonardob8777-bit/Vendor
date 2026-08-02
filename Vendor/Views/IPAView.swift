@@ -267,6 +267,16 @@ struct IPAView: View {
 			return
 		}
 
+		// The engine cannot be interrupted: `SigningPipeline` runs it in a
+		// detached task, and a detached task does not inherit cancellation. So
+		// Cancel closes the panel while zsign carries on to the end. Starting a
+		// second run in that window would put two pipelines on the same
+		// `signed.ipa`, both writing it as they finish.
+		guard job == nil else {
+			failure = t("ipa.stillWorking")
+			return
+		}
+
 		failure = nil
 		let task = AppTask(
 			appName: item.name,
@@ -278,6 +288,9 @@ struct IPAView: View {
 		lastSigned = nil
 
 		job = Task {
+			// Cleared here rather than by Cancel: the handle is what says whether
+			// the engine is still busy, and Cancel does not stop it.
+			defer { job = nil }
 			let destination = store.signedURL(for: item)
 			let signed: ImportedIPA
 
@@ -350,8 +363,11 @@ struct IPAView: View {
 	/// iOS's own prompt, where stopping costs nothing: the signature is already
 	/// on disk and the install is the system's to run or refuse.
 	private func cancelRunningJob() {
+		// The handle is deliberately kept. Cancelling asks the pipeline to stop
+		// at its next suspension point, but the engine itself runs detached and
+		// out of reach — so until this task really ends, the work is still going
+		// and nothing new may be started on the same package.
 		job?.cancel()
-		job = nil
 		installer.abort()
 		running = nil
 	}

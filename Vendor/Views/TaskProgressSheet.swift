@@ -56,7 +56,10 @@ final class AppTask: Identifiable {
 	var awaitingSystem = false
 	var failure: String?
 	/// Headline shown once the job lands.
-	var completionTitle = "Done"
+	/// Overwritten by `finish(title:detail:)`, which is the only route to `.done`
+	/// today. Localised anyway: a hardcoded English default in a bilingual app is
+	/// a trap waiting for the first caller that reaches the stage another way.
+	var completionTitle = t("task.done")
 	var completionDetail: String?
 
 	init(

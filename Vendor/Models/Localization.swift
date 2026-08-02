@@ -271,6 +271,10 @@ enum Strings {
 		),
 		"task.openApp":     (en: "Open app",  es: "Abrir app"),
 
+		"ipa.stillWorking": (
+			en: "Still finishing the previous run. The signing engine cannot be interrupted — give it a moment.",
+			es: "Todavía está terminando el intento anterior. El motor de firma no se puede interrumpir; dale un momento."
+		),
 		"ipa.pickCertFirst": (
 			en: "Choose a certificate for %@ first.",
 			es: "Elige antes un certificado para %@."
