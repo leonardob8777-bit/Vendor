@@ -88,6 +88,18 @@ struct AppDetailSheet: View {
 				.padding(.horizontal, 26)
 				.padding(.vertical, 100)
 		}
+		// Measured against the screen's bottom, not the safe area's.
+		//
+		// Opening the panel hides the tab bar, which takes its inset out of the
+		// bottom — and UIKit slides it away on its own clock, not ours. A panel
+		// measured against that inset is laid out once with the bar there and
+		// again without it, so it visibly settles downwards after it appears.
+		// Ignoring the bottom edge takes the tab bar out of the equation
+		// entirely: whatever it does, it cannot move this.
+		//
+		// Only the bottom. The top still respects the safe area, so the panel
+		// keeps clear of the Dynamic Island exactly as before.
+		.ignoresSafeArea(edges: .bottom)
 	}
 
 	private var panel: some View {

@@ -33,6 +33,11 @@ struct TrustSetupSheet: View {
 			panel
 				.padding(.horizontal, 20)
 		}
+		// Same reason as `AppDetailSheet`: hiding the tab bar pulls its inset
+		// out of the bottom of the safe area partway through the opening. A
+		// centred panel measured against it slides down by half that as it
+		// settles. Ignoring the bottom edge keeps it still.
+		.ignoresSafeArea(edges: .bottom)
 	}
 
 	private var panel: some View {

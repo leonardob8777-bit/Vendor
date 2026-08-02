@@ -33,6 +33,12 @@ struct GuideDetailSheet: View {
 				.padding(.horizontal, 26)
 				.padding(.vertical, 100)
 		}
+		// See `AppDetailSheet`: the tab bar's inset leaves the bottom of the
+		// safe area partway through the opening, and a panel measured against it
+		// settles downwards afterwards. Every floating window ignores the bottom
+		// edge for that reason, and they stay the same size as each other by
+		// doing it together.
+		.ignoresSafeArea(edges: .bottom)
 	}
 
 	/// The floating pane itself.
