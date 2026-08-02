@@ -32,6 +32,14 @@ struct ImportedIPA: Identifiable, Codable, Equatable {
 	/// Dylibs and tweak bundles queued for injection.
 	var tweakFileNames: [String]
 
+	/// Which catalogue entry this package was fetched for.
+	///
+	/// The Get button needs to know whether a row's app is already on the shelf,
+	/// and the file name is not an answer: two unrelated apps in the feed ship
+	/// their build as `Runner.ipa`, so downloading one made the other claim it
+	/// had been downloaded too. Optional so packages filed before this decode.
+	var sourceID: String?
+
 	/// Pre-signing edits the user has made to this package.
 	///
 	/// Optional purely so packages imported before this existed still decode:
@@ -147,7 +155,7 @@ final class IPAStore {
 	/// Copying and parsing happen off the main actor: both are file-system
 	/// bound, and running them inline froze the UI for the whole import.
 	@discardableResult
-	func importPackage(from source: URL) async throws -> ImportedIPA {
+	func importPackage(from source: URL, sourceID: String? = nil) async throws -> ImportedIPA {
 		let id = UUID()
 		let dir = folder(for: id)
 		let package = packageURL(for: id)
@@ -189,6 +197,7 @@ final class IPAStore {
 			signedWithCertificateID: nil,
 			signedAt: nil,
 			tweakFileNames: [],
+			sourceID: sourceID,
 			signOptions: nil
 		)
 		try write(item)

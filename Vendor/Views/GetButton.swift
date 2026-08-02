@@ -22,11 +22,19 @@ struct GetButton: View {
 	private var progress: Double? { downloader.progress[id] }
 	private var failure: String? { downloader.failures[id] }
 
-	/// The package this row already put on the shelf, if it did. Matched on the
-	/// file name, which is what the store records a package under.
+	/// The package this row already put on the shelf, if it did.
+	///
+	/// Matched on the catalogue entry it was fetched for. The file name used to
+	/// be the key, and two apps in the feed ship theirs as `Runner.ipa` — so
+	/// downloading one lit up the other's button and sent the user to install
+	/// the wrong app. The name is still consulted for packages filed before the
+	/// source was recorded.
 	private var imported: ImportedIPA? {
+		if let match = store.packages.first(where: { $0.sourceID == id }) { return match }
 		let bundledName = bundledFile.map { "\($0).ipa" }
-		return store.packages.first { $0.fileName == fileName || $0.fileName == bundledName }
+		return store.packages.first {
+			$0.sourceID == nil && ($0.fileName == fileName || $0.fileName == bundledName)
+		}
 	}
 
 	var body: some View {
@@ -116,6 +124,6 @@ struct GetButton: View {
 			.frame(width: 30, height: 30)
 			.frame(width: 62, height: 30)
 		}
-		.accessibilityLabel("Cancel download")
+		.accessibilityLabel(t("apps.cancelDownload"))
 	}
 }

@@ -164,6 +164,7 @@ enum Strings {
 		"apps.get":         (en: "Get",                 es: "Obtener"),
 		"apps.source":      (en: "Source",              es: "Fuente"),
 		"apps.downloadFailed": (en: "Download failed",  es: "Falló la descarga"),
+		"apps.cancelDownload": (en: "Cancel download",  es: "Cancelar descarga"),
 		"err.bundled.missing": (
 			en: "That app is missing from this build of Vendor.",
 			es: "Esa app no viene incluida en esta versión de Vendor."

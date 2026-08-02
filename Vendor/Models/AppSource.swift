@@ -209,7 +209,18 @@ enum SourceLoader {
 			name: source.name,
 			identifier: source.identifier,
 			iconURL: source.iconURL,
-			apps: source.apps.filter { !blocked.contains($0.bundleIdentifier.lowercased()) }
+			// Deduplicated as well as filtered. `SourceApp.id` is the bundle
+			// identifier, so two entries sharing one would give `ForEach` a
+			// repeated id — which SwiftUI documents as undefined, and which also
+			// makes both rows share one download's progress. The feed is not
+			// ours to trust on this.
+			apps: {
+				var seen = Set<String>()
+				return source.apps.filter {
+					!blocked.contains($0.bundleIdentifier.lowercased())
+						&& seen.insert($0.bundleIdentifier).inserted
+				}
+			}()
 		)
 		return source
 	}
