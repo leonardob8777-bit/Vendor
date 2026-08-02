@@ -52,6 +52,8 @@ enum SigningPipeline {
 		certificate: StoredCertificate,
 		certificateP12: URL,
 		certificateProfile: URL,
+		options: SignOptions = SignOptions(),
+		customIcon: URL? = nil,
 		into destination: URL,
 		progress: @escaping @MainActor (AppTask.Stage, Double) -> Void
 	) async throws -> Output {
@@ -90,6 +92,21 @@ enum SigningPipeline {
 			}.value
 		}
 
+		// MARK: Prepare
+
+		// Artwork, stripped libraries and entitlements all have to be settled
+		// before the signature is taken, or the signature covers a bundle that
+		// no longer matches what ships.
+		let prepared = try await Task.detached(priority: .userInitiated) {
+			try BundlePreparer.prepare(
+				bundle: bundle,
+				options: options,
+				iconFile: customIcon,
+				profile: certificateProfile,
+				scratch: scratch
+			)
+		}.value
+
 		// MARK: Sign
 
 		await progress(.signing, 0.35)
@@ -102,7 +119,14 @@ enum SigningPipeline {
 					bundlePath: bundle.path,
 					provisionPath: certificateProfile.path,
 					certificatePath: certificateP12.path,
-					certificatePassword: certificate.password
+					certificatePassword: certificate.password,
+					// Name, identifier and version are the engine's own
+					// overrides — it rewrites Info.plist as part of signing, so
+					// nothing on this side has to touch the file.
+					overrideIdentifier: options.identifierOverride,
+					overrideName: options.nameOverride,
+					overrideVersion: options.versionOverride,
+					entitlementsPath: prepared.entitlementsPath
 				)
 			)
 		}.value

@@ -53,6 +53,34 @@ enum IPAInspector {
 		)
 	}
 
+	/// Names of the dylibs and frameworks embedded in a package.
+	///
+	/// Read straight out of the archive rather than by unpacking: the list is
+	/// wanted while the user is still deciding what to sign, and unpacking a
+	/// 200 MB package to fill a disclosure row is not a trade worth making.
+	static func embeddedComponents(of package: URL) -> [String] {
+		let entries = ZipReader.entries(of: package)
+		guard !entries.isEmpty else { return [] }
+
+		var names: Set<String> = []
+		for entry in entries {
+			let parts = entry.path.components(separatedBy: "/")
+			// Payload/<App>.app/Frameworks/<name>/...
+			guard parts.count >= 4,
+				  parts[0] == "Payload",
+				  parts[1].hasSuffix(".app"),
+				  parts[2] == "Frameworks"
+			else { continue }
+
+			let name = parts[3]
+			// Only the component itself, not the files inside a .framework.
+			if name.hasSuffix(".dylib") || name.hasSuffix(".framework") {
+				names.insert(name)
+			}
+		}
+		return names.sorted()
+	}
+
 	/// Bundles list their schemes under CFBundleURLTypes; the first usable one
 	/// is enough to launch the app.
 	private static func firstURLScheme(in plist: [String: Any]) -> String? {

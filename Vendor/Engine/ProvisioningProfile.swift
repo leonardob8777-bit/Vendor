@@ -15,6 +15,12 @@ struct ProvisioningProfile {
 	let expirationDate: Date?
 	let applicationIdentifier: String?
 	let devices: [String]
+	/// The profile's own entitlements, verbatim.
+	///
+	/// A signed app has to carry the entitlements its profile grants, so adding
+	/// one means handing the engine this dictionary plus the extra key — not a
+	/// file holding the extra key alone, which would strip everything else.
+	let entitlements: [String: Any]
 
 	static func read(at url: URL) -> ProvisioningProfile? {
 		guard let data = try? Data(contentsOf: url),
@@ -31,7 +37,8 @@ struct ProvisioningProfile {
 			teamName: plist["TeamName"] as? String,
 			expirationDate: plist["ExpirationDate"] as? Date,
 			applicationIdentifier: entitlements?["application-identifier"] as? String,
-			devices: plist["ProvisionedDevices"] as? [String] ?? []
+			devices: plist["ProvisionedDevices"] as? [String] ?? [],
+			entitlements: entitlements ?? [:]
 		)
 	}
 

@@ -207,6 +207,54 @@ enum Strings {
 		"ipa.install":      (en: "Install",   es: "Instalar"),
 		"ipa.stateImported": (en: "Imported", es: "Importada"),
 		"ipa.stateSigned":   (en: "Signed",   es: "Firmada"),
+
+		// MARK: Sign options
+
+		"sign.options":   (en: "Before signing",   es: "Antes de firmar"),
+		"sign.name":      (en: "Name",             es: "Nombre"),
+		"sign.bundleID":  (en: "Bundle ID",        es: "Bundle ID"),
+		"sign.version":   (en: "Version",          es: "Versión"),
+		"sign.icon":      (en: "App icon",         es: "Icono de la app"),
+		"sign.iconChoose": (en: "Choose",          es: "Elegir"),
+		"sign.iconClear":  (en: "Reset",           es: "Quitar"),
+		"sign.duplicate": (en: "Install as duplicate", es: "Instalar como copia"),
+		"sign.duplicateWhy": (
+			en: "Signs under its own bundle ID so it sits beside the installed copy.",
+			es: "Firma con un bundle ID propio para que quede junto a la copia instalada."
+		),
+		"sign.jit":       (en: "Enable JIT",       es: "Activar JIT"),
+		"sign.jitWhy": (
+			en: "Adds get-task-allow, which lets a debugger or JIT runtime attach.",
+			es: "Añade get-task-allow, que permite enganchar un depurador o un runtime JIT."
+		),
+		"sign.advanced":  (en: "Advanced",         es: "Avanzado"),
+		"sign.components": (
+			en: "Embedded libraries",
+			es: "Librerías embebidas"
+		),
+		"sign.noComponents": (
+			en: "This package embeds none.",
+			es: "Este paquete no lleva ninguna."
+		),
+
+		// MARK: Pre-sign check
+
+		"preflight.noCert": (
+			en: "Pick a signing certificate above to enable signing.",
+			es: "Elige arriba un certificado de firma para poder firmar."
+		),
+		"preflight.lowSpace": (
+			en: "Only %@ free — signing this needs about %@.",
+			es: "Solo quedan %@ libres — firmar esto necesita unos %@."
+		),
+		"err.prepare.icon": (
+			en: "That image could not be used as an icon.",
+			es: "Esa imagen no se pudo usar como icono."
+		),
+		"err.prepare.entitlements": (
+			en: "The entitlements file could not be written.",
+			es: "No se pudo escribir el archivo de entitlements."
+		),
 		"task.installedOK": (en: "All done",  es: "Todo listo"),
 		"task.installedDetail": (
 			en: "%@ is signed and installed on your device.",

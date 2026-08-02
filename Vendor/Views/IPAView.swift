@@ -283,6 +283,8 @@ struct IPAView: View {
 					certificate: certificate,
 					certificateP12: certificates.p12URL(for: certID),
 					certificateProfile: certificates.provisionURL(for: certID),
+					options: item.options,
+					customIcon: store.customIconURL(for: item),
 					into: destination,
 					progress: { stage, fraction in task.advance(to: stage, fraction: fraction) }
 				)
@@ -447,7 +449,9 @@ struct IPAView: View {
 			if isOpen {
 				Divider().overlay(Color.inkSecondary.opacity(0.2))
 				certificatePicker(item)
+				SignOptionsSection(item: item)
 				tweakSection(item)
+				preflight(item)
 				actions(item)
 			}
 		}
@@ -474,7 +478,11 @@ struct IPAView: View {
 	/// The one control that carries the row: Sign until the package is signed,
 	/// Install from then on.
 	private func actionPill(_ item: ImportedIPA, ready: Bool) -> some View {
-		Button {
+		// Signing without a usable certificate cannot succeed, so the button says
+		// so by going flat rather than by letting the job start and fail.
+		let blocked = !ready && !check(item).canSign
+
+		return Button {
 			Haptics.tap()
 			ready ? installSigned(item: item) : sign(item)
 		} label: {
@@ -496,9 +504,15 @@ struct IPAView: View {
 					Capsule().fill(LinearGradient.actionFlow)
 				}
 			}
-			.shadow(color: (ready ? Color.installGlow : Color.brand).opacity(0.46), radius: 8, y: 3)
+			.shadow(
+				color: (ready ? Color.installGlow : Color.brand).opacity(blocked ? 0 : 0.46),
+				radius: 8, y: 3
+			)
+			.saturation(blocked ? 0 : 1)
+			.opacity(blocked ? 0.45 : 1)
 		}
 		.buttonStyle(.plain)
+		.disabled(blocked)
 	}
 
 	/// Artwork pulled out of the package at import time, with the generic
@@ -524,6 +538,84 @@ struct IPAView: View {
 				size: 46
 			)
 		}
+	}
+
+	// MARK: Pre-sign check
+
+	/// The two things worth knowing before the button is pressed. Deliberately
+	/// two and not a screenful: a check nobody reads costs the same room as one
+	/// they do.
+	private struct Preflight {
+		var hasCertificate: Bool
+		var freeBytes: Int64
+		var neededBytes: Int64
+
+		/// Space is a warning rather than a block — the estimate is a rule of
+		/// thumb, and refusing to sign over it would be wrong more often than
+		/// the failure it prevents.
+		var spaceIsTight: Bool { freeBytes > 0 && freeBytes < neededBytes }
+		var canSign: Bool { hasCertificate }
+	}
+
+	private func check(_ item: ImportedIPA) -> Preflight {
+		let usable = item.signedWithCertificateID
+			.flatMap { id in certificates.certificates.first { $0.id == id } }
+			.map(\.isUsable) ?? false
+
+		// Unpacked bundle plus the archive written back out, alongside the
+		// original that is never touched: about three times the package.
+		return Preflight(
+			hasCertificate: usable,
+			freeBytes: store.availableBytes() ?? 0,
+			neededBytes: item.sizeBytes * 3
+		)
+	}
+
+	@ViewBuilder
+	private func preflight(_ item: ImportedIPA) -> some View {
+		let state = check(item)
+
+		if !state.canSign || state.spaceIsTight {
+			VStack(alignment: .leading, spacing: 6) {
+				if !state.canSign {
+					checkRow(t("preflight.noCert"), glyph: "xmark.circle.fill", tone: .bad)
+				}
+				if state.spaceIsTight {
+					checkRow(
+						String(
+							format: t("preflight.lowSpace"),
+							byteText(state.freeBytes),
+							byteText(state.neededBytes)
+						),
+						glyph: "exclamationmark.triangle.fill",
+						tone: .warn
+					)
+				}
+			}
+		}
+	}
+
+	private func checkRow(_ text: String, glyph: String, tone: Color) -> some View {
+		HStack(alignment: .top, spacing: 7) {
+			Image(systemName: glyph)
+				.font(.system(size: 11, weight: .semibold))
+				.foregroundStyle(tone)
+			Text(text)
+				.font(.system(size: 11))
+				.foregroundStyle(Color.inkPrimary)
+				.fixedSize(horizontal: false, vertical: true)
+			Spacer(minLength: 0)
+		}
+		.padding(8)
+		.background(tone.opacity(0.10))
+		.clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+	}
+
+	private func byteText(_ bytes: Int64) -> String {
+		let f = ByteCountFormatter()
+		f.countStyle = .file
+		f.allowedUnits = [.useMB, .useGB]
+		return f.string(fromByteCount: bytes)
 	}
 
 	// MARK: Certificate

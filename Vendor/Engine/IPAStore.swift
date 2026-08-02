@@ -32,6 +32,16 @@ struct ImportedIPA: Identifiable, Codable, Equatable {
 	/// Dylibs and tweak bundles queued for injection.
 	var tweakFileNames: [String]
 
+	/// Pre-signing edits the user has made to this package.
+	///
+	/// Optional purely so packages imported before this existed still decode:
+	/// a non-optional property with a default value is still required by the
+	/// synthesised decoder, and every one of them would have vanished from the
+	/// shelf. Read it through ``options``.
+	var signOptions: SignOptions?
+
+	var options: SignOptions { signOptions ?? SignOptions() }
+
 	var isSigned: Bool { signedAt != nil }
 
 	var displaySize: String {
@@ -156,7 +166,8 @@ final class IPAStore {
 			importedAt: Date(),
 			signedWithCertificateID: nil,
 			signedAt: nil,
-			tweakFileNames: []
+			tweakFileNames: [],
+			signOptions: nil
 		)
 		try write(item)
 		reload()
@@ -208,6 +219,52 @@ final class IPAStore {
 		updated.signedWithCertificateID = certificateID
 		try? write(updated)
 		reload()
+	}
+
+	// MARK: Sign options
+
+	func setOptions(_ options: SignOptions, for item: ImportedIPA) {
+		var updated = item
+		updated.signOptions = options
+		try? write(updated)
+		reload()
+	}
+
+	/// Artwork the user chose to sign in, as opposed to ``iconURL`` which holds
+	/// the icon read out of the package at import time.
+	func customIconURL(for item: ImportedIPA) -> URL? {
+		guard let name = item.options.customIconName else { return nil }
+		let url = folder(for: item.id).appendingPathComponent(name)
+		return fm.fileExists(atPath: url.path) ? url : nil
+	}
+
+	/// Stores artwork picked from the photo library and returns its file name.
+	///
+	/// Deliberately does not touch the options: the card holds an uncommitted
+	/// draft while the user types, and writing the stored options back from here
+	/// would throw away whatever was half-typed in the fields above.
+	@discardableResult
+	func saveCustomIcon(_ data: Data, for item: ImportedIPA) throws -> String {
+		let name = "custom-icon.png"
+		let url = folder(for: item.id).appendingPathComponent(name)
+		do {
+			try data.write(to: url, options: .atomic)
+		} catch {
+			throw IPAStoreError.cannotWrite(error.localizedDescription)
+		}
+		return name
+	}
+
+	/// Deletes stored artwork. The caller clears the reference in its own draft.
+	func deleteCustomIcon(for item: ImportedIPA) {
+		guard let name = item.options.customIconName else { return }
+		try? fm.removeItem(at: folder(for: item.id).appendingPathComponent(name))
+	}
+
+	/// Free space on the volume the packages live on, for the pre-sign check.
+	func availableBytes() -> Int64? {
+		let values = try? root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+		return values?.volumeAvailableCapacityForImportantUsage
 	}
 
 	func delete(_ item: ImportedIPA) {
