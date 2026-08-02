@@ -159,11 +159,16 @@ struct TrustSetupSheet: View {
 	}
 
 	private func openAuthority() {
-		do {
-			let file = try installer.authorityFile()
-			ShareSheet.present(items: [file])
-		} catch {
-			failure = error.localizedDescription
+		// Building the authority mints an RSA pair the first time, which is slow
+		// enough to be felt. Awaited rather than run inline so the sheet stays
+		// responsive while it happens.
+		Task {
+			do {
+				let file = try await installer.authorityFile()
+				ShareSheet.present(items: [file])
+			} catch {
+				failure = error.localizedDescription
+			}
 		}
 	}
 }

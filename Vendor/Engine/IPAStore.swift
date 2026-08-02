@@ -40,9 +40,31 @@ struct ImportedIPA: Identifiable, Codable, Equatable {
 	/// shelf. Read it through ``options``.
 	var signOptions: SignOptions?
 
+	/// Identifier the signed build actually carries, read back out of the bundle
+	/// after the engine has applied any override.
+	///
+	/// Kept apart from ``bundleIdentifier`` rather than overwriting it: that one
+	/// is what the original package holds, and re-signing always starts from the
+	/// original. Optional so packages signed before this existed still decode.
+	var signedBundleIdentifier: String?
+
 	var options: SignOptions { signOptions ?? SignOptions() }
 
 	var isSigned: Bool { signedAt != nil }
+
+	// MARK: What the signed build looks like
+
+	/// The identifier iOS is asked to install under.
+	///
+	/// The manifest has to name what is inside the archive. Naming the original
+	/// while the archive carries an override is what would make Install as
+	/// Duplicate install over the copy it was meant to sit beside.
+	var installIdentifier: String? { signedBundleIdentifier ?? bundleIdentifier }
+
+	/// Title and version for the install prompt, following the same overrides
+	/// the engine wrote into the bundle.
+	var installName: String { options.nameOverride ?? name }
+	var installVersion: String? { options.versionOverride ?? version }
 
 	var displaySize: String {
 		let f = ByteCountFormatter()
@@ -198,10 +220,13 @@ final class IPAStore {
 
 	/// Records a successful signing run, which moves the package to the Signed
 	/// shelf and makes `signedURL` the file worth exporting.
-	func markSigned(_ item: ImportedIPA, with certificateID: UUID) {
+	func markSigned(_ item: ImportedIPA, with certificateID: UUID, identifier: String? = nil) {
 		var updated = item
 		updated.signedWithCertificateID = certificateID
 		updated.signedAt = Date()
+		// What the engine actually wrote, not what was asked for: an override the
+		// engine declined to apply would otherwise be recorded as if it had taken.
+		updated.signedBundleIdentifier = identifier
 		if let size = try? fm.attributesOfItem(atPath: signedURL(for: item.id).path)[.size] as? Int64 {
 			updated.sizeBytes = size
 		}

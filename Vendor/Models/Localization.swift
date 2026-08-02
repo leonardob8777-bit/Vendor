@@ -247,6 +247,10 @@ enum Strings {
 			en: "Only %@ free — signing this needs about %@.",
 			es: "Solo quedan %@ libres — firmar esto necesita unos %@."
 		),
+		"err.install.simulator": (
+			en: "The simulator cannot install apps — itms-services only exists on a real device. Run this on your iPhone.",
+			es: "El simulador no puede instalar apps: itms-services solo existe en un dispositivo real. Pruébalo en tu iPhone."
+		),
 		"err.prepare.icon": (
 			en: "That image could not be used as an icon.",
 			es: "Esa imagen no se pudo usar como icono."

@@ -293,7 +293,11 @@ struct IPAView: View {
 					into: destination,
 					progress: { stage, fraction in task.advance(to: stage, fraction: fraction) }
 				)
-				store.markSigned(item, with: certID)
+				// The identifier comes back out of the signed bundle rather than
+				// from the options: it is what the manifest has to declare, and
+				// declaring the original while the archive carries an override
+				// installs over the copy this was meant to sit beside.
+				store.markSigned(item, with: certID, identifier: output.bundleIdentifier)
 				signed = store.packages.first { $0.id == item.id } ?? item
 				signedFile = output.archive
 				lastSigned = signed

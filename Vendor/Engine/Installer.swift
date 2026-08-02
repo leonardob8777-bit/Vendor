@@ -25,6 +25,7 @@ enum InstallerError: LocalizedError {
 	case authorityNotTrusted
 	case systemRefused
 	case cancelled
+	case simulatorUnsupported
 
 	var errorDescription: String? {
 		switch self {
@@ -33,6 +34,7 @@ enum InstallerError: LocalizedError {
 		case .authorityNotTrusted: return t("err.install.notTrusted")
 		case .systemRefused:      return t("err.install.refused")
 		case .cancelled:          return t("err.install.cancelled")
+		case .simulatorUnsupported: return t("err.install.simulator")
 		}
 	}
 }
@@ -74,8 +76,8 @@ final class Installer {
 	/// install it. iOS only offers the "Install Profile" flow for a certificate
 	/// it is handed directly, which is why this goes through a file rather than
 	/// the local server.
-	func authorityFile() throws -> URL {
-		let identity = try ensureIdentity()
+	func authorityFile() async throws -> URL {
+		let identity = try await ensureIdentity()
 		let url = URL.temporaryDirectory.appendingPathComponent("Vendor-Authority.cer")
 		try identity.authorityDER.write(to: url, options: .atomic)
 		return url
@@ -96,9 +98,16 @@ final class Installer {
 		guard FileManager.default.fileExists(atPath: package.path) else {
 			throw InstallerError.noSignedBuild
 		}
-		guard let bundleID = item.bundleIdentifier else {
+		guard let bundleID = item.installIdentifier else {
 			throw InstallerError.noBundleIdentifier
 		}
+		// itms-services has no handler in the simulator. Left to run, the open
+		// call spends five seconds inside LaunchServices before giving up, and
+		// the whole screen is frozen for it — which reads as Vendor hanging
+		// rather than as the simulator being unable to install anything at all.
+		#if targetEnvironment(simulator)
+		throw InstallerError.simulatorUnsupported
+		#endif
 		shutdown?.cancel()
 		finishServing()
 		server.forgetRequests()
@@ -117,7 +126,7 @@ final class Installer {
 			// Vendor mints itself, which needs the one-time trust step.
 			guard authorityInstalled else { throw InstallerError.authorityNotTrusted }
 			host = LocalCertificate.host
-			let stored = try ensureIdentity()
+			let stored = try await ensureIdentity()
 			try await server.start(identity: try keychainIdentity(for: stored))
 		}
 
@@ -256,11 +265,15 @@ final class Installer {
 					"kind": "software-package",
 					"url": packageURL,
 				]],
+				// Everything here describes what is inside the archive, not what
+				// was imported. An override the user set is already baked into
+				// the signed bundle, so the prompt has to say the same thing —
+				// otherwise iOS is told one name and hands over another.
 				"metadata": [
 					"bundle-identifier": bundleID,
-					"bundle-version": item.version ?? "1.0",
+					"bundle-version": item.installVersion ?? "1.0",
 					"kind": "software",
-					"title": item.name,
+					"title": item.installName,
 				],
 			]]
 		]
@@ -320,13 +333,19 @@ final class Installer {
 
 	/// Generates the pair on first use and keeps it in the keychain thereafter,
 	/// so the authority the user trusted stays the one the server presents.
-	private func ensureIdentity() throws -> GeneratedIdentity {
+	private func ensureIdentity() async throws -> GeneratedIdentity {
 		let stored = UserDefaults.standard.integer(forKey: Self.versionKey)
 		if stored == Self.formatVersion, let existing = loadIdentity() {
 			return existing
 		}
 
-		let generated = try LocalCertificate.generate()
+		// Two 2048-bit RSA keys. Measured at ~510 ms on a simulator running on
+		// an M1, so noticeably worse on a phone — and this class is @MainActor,
+		// so run inline it freezes the screen at the exact moment the user has
+		// just tapped a button. Detached, the progress panel keeps animating.
+		let generated = try await Task.detached(priority: .userInitiated) {
+			try LocalCertificate.generate()
+		}.value
 		try store(generated)
 		UserDefaults.standard.set(Self.formatVersion, forKey: Self.versionKey)
 		// A new authority is a different authority: whatever the device trusted
