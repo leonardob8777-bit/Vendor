@@ -284,24 +284,24 @@ struct AppDetailSheet: View {
 						// Height is fixed, width follows each image's own shape:
 						// feeds mix portrait and landscape captures, and forcing
 						// one frame on both crops or turns them.
-						AsyncImage(url: url) { phase in
-							switch phase {
-							case .success(let image):
-								image
-									.resizable()
-									.aspectRatio(contentMode: .fit)
-									.frame(height: 260)
-							case .failure:
-								Color.inkSecondary.opacity(0.12)
-									.frame(width: 140, height: 260)
-							default:
-								ZStack {
-									Color.inkSecondary.opacity(0.10)
-									ProgressView()
-								}
-								.frame(width: 140, height: 260)
+						//
+						// Through the cache rather than `AsyncImage`, which keeps
+						// nothing: every open of this sheet re-fetched every
+						// screenshot, and they are far heavier than the icons the
+						// cache was built for. Asked for at 1024 px rather than
+						// the icon default, since they are shown many times larger.
+						CachedImage(
+							url: url,
+							maximumPixels: ImageCache.screenshotPixels,
+							contentMode: .fit
+						) {
+							ZStack {
+								Color.inkSecondary.opacity(0.10)
+								ProgressView()
 							}
+							.frame(width: 140)
 						}
+						.frame(height: 260)
 						.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)

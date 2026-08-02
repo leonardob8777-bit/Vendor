@@ -25,12 +25,20 @@ final class ImageCache: @unchecked Sendable {
 
 	/// NSCache is thread-safe on its own, which is what lets a view read from
 	/// it during `init` and draw a cached icon with no placeholder frame.
-	private let memory = NSCache<NSURL, UIImage>()
+	private let memory = NSCache<NSString, UIImage>()
 	private let folder: URL
 
 	/// Icons are shown at 52 pt and, in the install ring, at about 82 pt. 512 px
-	/// covers both at 3× with room to spare.
-	private let maximumPixels = 512
+	/// covers both at 3× with room to spare. Screenshots ask for more.
+	static let iconPixels = 512
+	static let screenshotPixels = 1024
+
+	/// Keyed by size as well as URL. The same artwork can legitimately be wanted
+	/// at two sizes, and one shared entry would hand whichever asked second the
+	/// other one's resolution.
+	private func key(_ url: URL, _ pixels: Int) -> NSString {
+		"\(url.absoluteString)#\(pixels)" as NSString
+	}
 
 	private init() {
 		folder = URL.cachesDirectory.appendingPathComponent("Artwork", isDirectory: true)
@@ -39,16 +47,16 @@ final class ImageCache: @unchecked Sendable {
 	}
 
 	/// Already-decoded image, or nil. Cheap enough to call while laying out.
-	func inMemory(_ url: URL?) -> UIImage? {
+	func inMemory(_ url: URL?, maximumPixels: Int = ImageCache.iconPixels) -> UIImage? {
 		guard let url else { return nil }
-		return memory.object(forKey: url as NSURL)
+		return memory.object(forKey: key(url, maximumPixels))
 	}
 
 	/// Memory, then disk, then the network.
-	func image(for url: URL) async -> UIImage? {
-		if let hit = memory.object(forKey: url as NSURL) { return hit }
+	func image(for url: URL, maximumPixels: Int = ImageCache.iconPixels) async -> UIImage? {
+		if let hit = memory.object(forKey: key(url, maximumPixels)) { return hit }
 
-		let file = cacheFile(for: url)
+		let file = cacheFile(for: url, maximumPixels: maximumPixels)
 		let limit = maximumPixels
 
 		let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
@@ -71,7 +79,7 @@ final class ImageCache: @unchecked Sendable {
 			return Self.decode(file, maximumPixels: limit)
 		}.value
 
-		if let image { memory.setObject(image, forKey: url as NSURL) }
+		if let image { memory.setObject(image, forKey: key(url, maximumPixels)) }
 		return image
 	}
 
@@ -91,9 +99,9 @@ final class ImageCache: @unchecked Sendable {
 	}
 
 	/// One file per URL, named by a hash so the path stays short and legal.
-	private func cacheFile(for url: URL) -> URL {
+	private func cacheFile(for url: URL, maximumPixels: Int) -> URL {
 		var hash: UInt64 = 5381
-		for byte in url.absoluteString.utf8 {
+		for byte in "\(url.absoluteString)#\(maximumPixels)".utf8 {
 			hash = hash &* 33 &+ UInt64(byte)
 		}
 		return folder.appendingPathComponent(String(hash, radix: 36))
@@ -103,16 +111,29 @@ final class ImageCache: @unchecked Sendable {
 /// Drop-in replacement for `AsyncImage` that goes through the cache.
 struct CachedImage<Placeholder: View>: View {
 	let url: URL?
+	/// Longest edge to decode to. Icons keep the default; screenshots ask for
+	/// more, since they are shown many times larger.
+	var maximumPixels: Int = ImageCache.iconPixels
+	/// `.fill` suits a square tile that will be cropped. A screenshot has to
+	/// keep its own shape, so it asks for `.fit`.
+	var contentMode: ContentMode = .fill
 	@ViewBuilder var placeholder: () -> Placeholder
 
 	@State private var image: UIImage?
 
-	init(url: URL?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
+	init(
+		url: URL?,
+		maximumPixels: Int = ImageCache.iconPixels,
+		contentMode: ContentMode = .fill,
+		@ViewBuilder placeholder: @escaping () -> Placeholder
+	) {
 		self.url = url
+		self.maximumPixels = maximumPixels
+		self.contentMode = contentMode
 		self.placeholder = placeholder
 		// Seeded from memory so an icon already fetched draws immediately
 		// instead of flashing its placeholder for a frame.
-		_image = State(initialValue: ImageCache.shared.inMemory(url))
+		_image = State(initialValue: ImageCache.shared.inMemory(url, maximumPixels: maximumPixels))
 	}
 
 	var body: some View {
@@ -120,14 +141,14 @@ struct CachedImage<Placeholder: View>: View {
 			if let image {
 				Image(uiImage: image)
 					.resizable()
-					.aspectRatio(contentMode: .fill)
+					.aspectRatio(contentMode: contentMode)
 			} else {
 				placeholder()
 			}
 		}
 		.task(id: url) {
 			guard image == nil, let url else { return }
-			image = await ImageCache.shared.image(for: url)
+			image = await ImageCache.shared.image(for: url, maximumPixels: maximumPixels)
 		}
 	}
 }
