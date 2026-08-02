@@ -58,7 +58,11 @@ struct IPAView: View {
 	@State private var lastSigned: ImportedIPA?
 
 	var body: some View {
-		Screen(t("tab.ipa"), toolbar: AnyView(addButton)) {
+		Screen(
+			t("tab.ipa"),
+			toolbar: AnyView(addButton),
+			contentBlur: running == nil && !showingTrustSetup ? 0 : 16
+		) {
 			shelfPicker
 
 			if busy {
@@ -89,7 +93,6 @@ struct IPAView: View {
 				calloutRow(failure)
 			}
 		}
-		.blur(radius: running == nil ? 0 : 16)
 		.animation(.easeInOut(duration: 0.25), value: running == nil)
 		.overlay {
 			if let task = running {

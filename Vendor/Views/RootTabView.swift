@@ -97,11 +97,28 @@ struct RootTabView: View {
 struct Screen<Content: View>: View {
 	let title: String
 	var toolbar: AnyView?
+	/// Softens the screen's own content while a panel floats over it.
+	///
+	/// Deliberately applied here rather than to the whole screen from outside.
+	/// The aurora ignores the safe area, so it paints the strip beneath the
+	/// Dynamic Island — which sits outside the bounds of a blur applied to the
+	/// screen as a whole. That strip stayed sharp while everything below it went
+	/// soft, and the join read as a black line ruled across the top of the
+	/// display. Blurring the content and leaving the aurora alone has no seam to
+	/// give away: the backdrop is a slow gradient, and blurring it changed
+	/// nothing anyone could see.
+	var contentBlur: CGFloat = 0
 	@ViewBuilder var content: () -> Content
 
-	init(_ title: String, toolbar: AnyView? = nil, @ViewBuilder content: @escaping () -> Content) {
+	init(
+		_ title: String,
+		toolbar: AnyView? = nil,
+		contentBlur: CGFloat = 0,
+		@ViewBuilder content: @escaping () -> Content
+	) {
 		self.title = title
 		self.toolbar = toolbar
+		self.contentBlur = contentBlur
 		self.content = content
 	}
 
@@ -125,6 +142,7 @@ struct Screen<Content: View>: View {
 			// shows the last card through its material.
 			.padding(.bottom, 96)
 		}
+		.blur(radius: contentBlur)
 		.auroraBackground()
 	}
 }

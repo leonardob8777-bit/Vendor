@@ -18,7 +18,7 @@ struct GuideView: View {
 	}
 
 	var body: some View {
-		Screen(t("tab.guide")) {
+		Screen(t("tab.guide"), contentBlur: opened == nil ? 0 : 16) {
 			searchField
 			VStack(spacing: 8) {
 				ForEach(filtered) { guide in
@@ -33,7 +33,6 @@ struct GuideView: View {
 		// screen behind it cannot be blurred. Laying the panel over the content
 		// is what lets the guide float above a soft version of the list, the
 		// same way the install panel does.
-		.blur(radius: opened == nil ? 0 : 16)
 		.animation(.easeInOut(duration: 0.25), value: opened == nil)
 		.overlay {
 			if let guide = opened {
