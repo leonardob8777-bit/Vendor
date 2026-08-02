@@ -233,16 +233,6 @@ extension View {
 			.shadow(color: .black.opacity(0.16), radius: 6, y: 2)
 	}
 
-	/// Kept so existing call sites compile. Every panel now uses the same
-	/// frosted surface — the corner argument is ignored on purpose.
-	func accentCard(padding: CGFloat = 16, corner: UnitPoint = .topLeading) -> some View {
-		modifier(CardSurface(padding: padding))
-	}
-
-	/// Frosted pill, for search fields and other inline controls.
-	func glassField(radius: CGFloat = 22) -> some View {
-		modifier(CardSurface(padding: 0, radius: radius))
-	}
 }
 
 

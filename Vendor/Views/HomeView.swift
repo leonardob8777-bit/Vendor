@@ -141,7 +141,11 @@ struct HomeView: View {
 							.lineLimit(1)
 					}
 
-					if let expiry = cert.expiresAt {
+					// Not shown for a rejected certificate. Its expiry date is
+					// usually still in the future, so the line read "Valid until
+					// <date>" directly beneath a red Rejected badge — the card
+					// contradicting itself about the only thing it is for.
+					if let expiry = cert.expiresAt, cert.isUsable {
 						let date = expiry.formatted(date: .abbreviated, time: .omitted)
 						// Past-tense wording once the date has gone by.
 						Text(String(format: expiry > Date() ? t("home.validUntil") : t("home.expiredOn"), date))

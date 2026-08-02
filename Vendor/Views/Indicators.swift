@@ -23,6 +23,11 @@ struct BlinkingDot: View {
 			.opacity(lit ? 1 : 0.22)
 			.onAppear {
 				guard !reduceMotion else { lit = true; return }
+				// Put it out before lighting it again. Leaving the screen and
+				// coming back runs this a second time with `lit` still true from
+				// the first, and animating a value to the value it already holds
+				// starts nothing — the dot sat solid from then on.
+				lit = false
 				DispatchQueue.main.async {
 					withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
 						lit = true
