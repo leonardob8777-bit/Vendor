@@ -13,7 +13,7 @@ import UIKit
 enum ShareSheet {
 
 	static func present(items: [Any]) {
-		guard let presenter = topViewController() else { return }
+		guard let presenter = UIApplication.topViewController() else { return }
 
 		let controller = UIActivityViewController(
 			activityItems: items,
@@ -34,15 +34,4 @@ enum ShareSheet {
 		presenter.present(controller, animated: true)
 	}
 
-	private static func topViewController() -> UIViewController? {
-		let scene = UIApplication.shared.connectedScenes
-			.compactMap { $0 as? UIWindowScene }
-			.first { $0.activationState == .foregroundActive }
-
-		guard var top = scene?.keyWindow?.rootViewController else { return nil }
-		while let presented = top.presentedViewController {
-			top = presented
-		}
-		return top
-	}
 }

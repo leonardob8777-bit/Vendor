@@ -154,7 +154,7 @@ enum SigningPipeline {
 	/// each dylib. Injection happens before signing so the new load commands
 	/// are covered by the signature.
 	private static func injectTweaks(_ tweaks: [URL], into bundle: URL) throws {
-		guard let executable = executableURL(of: bundle) else {
+		guard let executable = BundlePreparer.executableURL(of: bundle) else {
 			throw SigningPipelineError.noExecutable
 		}
 
@@ -278,11 +278,4 @@ enum SigningPipeline {
 	}
 
 	/// The bundle's main binary, which is what load commands are added to.
-	private static func executableURL(of bundle: URL) -> URL? {
-		guard let name = infoPlist(of: bundle)?["CFBundleExecutable"] as? String else {
-			return nil
-		}
-		let url = bundle.appendingPathComponent(name)
-		return FileManager.default.fileExists(atPath: url.path) ? url : nil
-	}
 }

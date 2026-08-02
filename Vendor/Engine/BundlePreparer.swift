@@ -228,7 +228,9 @@ enum BundlePreparer {
 		}
 	}
 
-	private static func executableURL(of bundle: URL) -> URL? {
+	/// The bundle's main binary. Shared with `SigningPipeline`, which needs the
+	/// same answer when it injects a tweak's load command.
+	static func executableURL(of bundle: URL) -> URL? {
 		let plistURL = bundle.appendingPathComponent("Info.plist")
 		guard let data = try? Data(contentsOf: plistURL),
 			  let plist = (try? PropertyListSerialization.propertyList(

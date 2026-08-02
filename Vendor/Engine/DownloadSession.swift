@@ -156,12 +156,23 @@ extension DownloadSession: URLSessionDownloadDelegate {
 
 		guard let entry else { return }
 
+		// A download can finish, be moved into place, and only then complete with
+		// an error — cancelling in that window is enough. The caller never sees
+		// the file, so it never removes it, and a whole package sits in tmp for
+		// as long as iOS feels like keeping it.
+		func discardLanded() {
+			guard let landed = entry.landed else { return }
+			try? FileManager.default.removeItem(at: landed.deletingLastPathComponent())
+		}
+
 		if let error {
 			// A cancelled task is the user's doing, and the caller reads it as
 			// cancellation rather than as a failure worth an alert.
+			discardLanded()
 			let isCancelled = (error as? URLError)?.code == .cancelled
 			entry.continuation.resume(throwing: isCancelled ? CancellationError() : error)
 		} else if let failure = entry.failure {
+			discardLanded()
 			entry.continuation.resume(throwing: failure)
 		} else if let landed = entry.landed {
 			entry.continuation.resume(returning: landed)
