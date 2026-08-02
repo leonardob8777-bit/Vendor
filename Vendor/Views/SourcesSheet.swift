@@ -234,6 +234,15 @@ struct SourcesSheet: View {
 						Image(systemName: "trash")
 							.font(.system(size: 12, weight: .semibold))
 							.foregroundStyle(Color.bad)
+							// The glyph alone is a 13x15pt target, well under the
+							// 44pt Apple asks for. Enlarged on that ground rather
+							// than to fix a bug: a long chase through a button
+							// that would not respond to a synthesised click ended
+							// with the click being too brief, not the target too
+							// small. A finger was never the problem — but 13pt is
+							// still too little to aim at.
+							.frame(width: 44, height: 44)
+							.contentShape(Rectangle())
 					}
 					.buttonStyle(.plain)
 					.accessibilityLabel(t("sources.remove"))
