@@ -29,7 +29,15 @@ struct HomeView: View {
 	}
 
 	var body: some View {
-		Screen(t("tab.home"), toolbar: AnyView(LanguageButton(isPresented: $pickingLanguage))) {
+		Screen(
+			t("tab.home"),
+			toolbar: AnyView(LanguageButton(isPresented: $pickingLanguage)),
+			// Through `Screen` rather than a `.blur` on the whole thing: the
+			// aurora ignores the safe area, so blurring the screen as a whole
+			// left the strip beside the Dynamic Island outside the blurred layer
+			// and the join read as a black line ruled across the top.
+			contentBlur: pickingLanguage ? 16 : 0
+		) {
 			banner
 			certificateStatus
 			quickActions
@@ -37,7 +45,6 @@ struct HomeView: View {
 			community
 			disclaimer
 		}
-		.blur(radius: pickingLanguage ? 14 : 0)
 		.overlay {
 			if pickingLanguage {
 				LanguagePicker { pickingLanguage = false }
@@ -45,6 +52,9 @@ struct HomeView: View {
 			}
 		}
 		.animation(.spring(response: 0.32, dampingFraction: 0.86), value: pickingLanguage)
+		// The tab bar is the TabView's, so it draws above anything a tab lays
+		// over its own content — sharp chrome on top of a floating panel.
+		.toolbar(pickingLanguage ? .hidden : .visible, for: .tabBar)
 		.inAppBrowser($browsing)
 		.task {
 			probe.run()

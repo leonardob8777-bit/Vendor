@@ -30,8 +30,13 @@ struct LanguagePicker: View {
 
 	var body: some View {
 		ZStack {
-			Color.black.opacity(0.22)
+			// No dimming layer, for the reason spelled out in GuideDetailSheet:
+			// a veil across the whole screen darkens the strip beside the
+			// Dynamic Island too, where it reads as a black sheet laid over the
+			// display rather than as depth.
+			Color.clear
 				.ignoresSafeArea()
+				.contentShape(Rectangle())
 				.onTapGesture(perform: onClose)
 
 			panel
