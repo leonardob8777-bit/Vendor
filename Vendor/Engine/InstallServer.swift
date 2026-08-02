@@ -207,8 +207,33 @@ final class InstallServer {
 	// MARK: Connections
 
 	private func accept(_ connection: NWConnection) {
+		// The listener is not pinned to loopback, for the reason above — but the
+		// only client that has any business here is `installd`, which connects
+		// from this device. Without this check the signed package is reachable
+		// from the local network for as long as an install is in flight, and it
+		// carries the embedded provisioning profile: team identifier and the
+		// device UDID, which are not things to hand to whoever is on the Wi-Fi.
+		//
+		// Fails open on purpose. Only an address that is definitely not loopback
+		// is refused; anything unrecognised is let through. Getting this wrong in
+		// the other direction would break installing altogether, and installing
+		// is the one path that cannot be checked from a simulator.
+		if isDefinitelyRemote(connection.endpoint) {
+			connection.cancel()
+			return
+		}
 		connection.start(queue: queue)
 		receive(on: connection, buffer: Data())
+	}
+
+	/// True only when the peer's address is known and is not this device.
+	private func isDefinitelyRemote(_ endpoint: NWEndpoint) -> Bool {
+		guard case let .hostPort(host, _) = endpoint else { return false }
+		switch host {
+		case .ipv4(let address): return !address.isLoopback && !address.isLinkLocal
+		case .ipv6(let address): return !address.isLoopback && !address.isLinkLocal
+		default: return false
+		}
 	}
 
 	/// Reads until the request headers are complete. A GET has no body, so the
