@@ -150,6 +150,12 @@ enum BundlePreparer {
 	/// pointing at nothing, and the app dies at launch instead of starting
 	/// without the tweak.
 	private static func removeComponents(_ names: [String], from bundle: URL) {
+		// Checked before anything is deleted, not after. If the load commands
+		// cannot be touched then deleting the files is the worse half of the job
+		// on its own: the app would ship pointing at libraries that are no longer
+		// there and die on launch. Doing nothing at least leaves it working.
+		guard let executable = executableURL(of: bundle), isMachO(executable) else { return }
+
 		let fm = FileManager.default
 		let frameworks = bundle.appendingPathComponent("Frameworks", isDirectory: true)
 
@@ -157,7 +163,6 @@ enum BundlePreparer {
 			try? fm.removeItem(at: frameworks.appendingPathComponent(name))
 		}
 
-		guard let executable = executableURL(of: bundle), isMachO(executable) else { return }
 		// Matching on the last path component rather than the whole string: a
 		// load command may be written @rpath, @executable_path or absolute, and
 		// the list the user ticked holds file names.
@@ -173,24 +178,51 @@ enum BundlePreparer {
 		SigningEngine.remove(dylibs: doomed, fromExecutableAt: executable.path)
 	}
 
-	/// Whether the file opens with a Mach-O or fat-binary magic number.
+	/// Whether the file is plausibly a Mach-O the engine can parse.
 	///
-	/// Checked before asking the engine to list load commands: its `ListDylibs`
-	/// returns nil on a file it cannot parse and the Swift wrapper force-unwraps
-	/// that, so an unreadable executable takes the whole app down rather than
-	/// failing the step. Cheap insurance on a path the user reaches by ticking a
-	/// checkbox.
+	/// Checked before asking it to list load commands: `ListDylibs` returns nil
+	/// on a file it cannot read and the Swift wrapper force-unwraps that, so an
+	/// unreadable executable takes the whole app down instead of failing the
+	/// step. There is no way to catch that from here — the only defence is not
+	/// making the call.
+	///
+	/// The size floor matters as much as the magic. A four-byte file holding
+	/// nothing but `CA FE BA BE` passes a magic test and still crashes the
+	/// engine, which is exactly how this was first hit. No real app binary is
+	/// anywhere near this small.
 	private static func isMachO(_ url: URL) -> Bool {
+		guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+			  let size = attributes[.size] as? Int,
+			  size >= 4096
+		else { return false }
+
 		guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
 		defer { try? handle.close() }
-		guard let head = try? handle.read(upToCount: 4), head.count == 4 else { return false }
+		guard let head = try? handle.read(upToCount: 32), head.count == 32 else { return false }
 
-		let magic = head.withUnsafeBytes { $0.load(as: UInt32.self) }
-		switch magic {
-		case 0xFEED_FACE, 0xCEFA_EDFE,   // 32-bit, either byte order
-			 0xFEED_FACF, 0xCFFA_EDFE,   // 64-bit
-			 0xCAFE_BABE, 0xBEBA_FECA:   // fat
-			return true
+		func word(_ offset: Int, swapped: Bool) -> UInt32 {
+			let raw = head.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) }
+			return swapped ? raw.byteSwapped : raw
+		}
+
+		switch word(0, swapped: false) {
+		case 0xBEBA_FECA, 0xCAFE_BABE:
+			// Fat. The architecture count follows the magic, and a real binary
+			// carries a handful — a bogus one reads as millions.
+			let swapped = word(0, swapped: false) == 0xBEBA_FECA
+			let architectures = word(4, swapped: swapped)
+			return (1...16).contains(architectures)
+
+		case 0xFEED_FACE, 0xFEED_FACF, 0xCEFA_EDFE, 0xCFFA_EDFE:
+			// Thin. Check the file type is something that carries load commands
+			// and that the command count is plausible.
+			let magic = word(0, swapped: false)
+			let swapped = magic == 0xCEFA_EDFE || magic == 0xCFFA_EDFE
+			let fileType = word(12, swapped: swapped)
+			let commands = word(16, swapped: swapped)
+			let executable: Set<UInt32> = [2, 6, 8]  // MH_EXECUTE, MH_DYLIB, MH_BUNDLE
+			return executable.contains(fileType) && (1...4096).contains(commands)
+
 		default:
 			return false
 		}
