@@ -20,9 +20,13 @@ struct GuideDetailSheet: View {
 
 	var body: some View {
 		ZStack {
-			// Only a light veil: the blurred screen behind stays legible, the
-			// same treatment the install panel gets.
-			Color.black.opacity(0.18)
+			// Deliberately no dimming layer. A veil over the whole screen also
+			// covers the strip beside the Dynamic Island, where there is nothing
+			// but backdrop to dim — so opening a guide darkened that strip by a
+			// flat 18% and it read as a black sheet laid over the top of the
+			// display. The blurred content behind and the pane's own material
+			// separate the two planes on their own.
+			Color.clear
 				.ignoresSafeArea()
 
 			panel

@@ -111,9 +111,12 @@ struct TaskProgressSheet: View {
 
 	var body: some View {
 		ZStack {
-			// Only a light veil: the app list stays legible behind the panel,
-			// blurred by the panel's own material rather than hidden.
-			Color.black.opacity(0.18)
+			// No dimming layer, for the reason spelled out in GuideDetailSheet:
+			// a veil across the whole screen darkens the strip beside the
+			// Dynamic Island too, where it reads as a black sheet rather than as
+			// depth. The blurred content and the panel's own material carry the
+			// separation.
+			Color.clear
 				.ignoresSafeArea()
 
 			panel
