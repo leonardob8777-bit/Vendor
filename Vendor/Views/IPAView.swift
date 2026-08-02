@@ -469,11 +469,14 @@ struct IPAView: View {
 		}
 	}
 
-	/// Artwork pulled out of the package at import time, for the install ring.
-	/// Without this the ring fell back to its dashed placeholder for the whole
-	/// job, which is the one moment the app most wants to be recognisable.
+	/// Artwork for the install ring and the card.
+	///
+	/// A chosen icon wins over the one read out of the package: it is what the
+	/// app is being signed to look like, so showing the old one through the whole
+	/// job says the choice did not take.
 	private func artwork(for item: ImportedIPA) -> URL? {
-		item.hasIcon ? store.iconURL(for: item.id) : nil
+		if let custom = store.customIconURL(for: item) { return custom }
+		return item.hasIcon ? store.iconURL(for: item.id) : nil
 	}
 
 	private func isReady(_ item: ImportedIPA) -> Bool {
@@ -526,7 +529,7 @@ struct IPAView: View {
 	private func packageIcon(_ item: ImportedIPA) -> some View {
 		let tint: Color = item.isSigned ? .ok : .brand
 
-		if item.hasIcon, let image = UIImage(contentsOfFile: store.iconURL(for: item.id).path) {
+		if let url = artwork(for: item), let image = UIImage(contentsOfFile: url.path) {
 			Image(uiImage: image)
 				.resizable()
 				.aspectRatio(contentMode: .fill)

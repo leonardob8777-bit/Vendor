@@ -120,19 +120,19 @@ enum BundlePreparer {
 				from: data, options: [], format: nil)) as? [String: Any]
 		else { throw BundlePreparerError.iconUnreadable }
 
-		let phone = ["CFBundlePrimaryIcon": ["CFBundleIconFiles": ["VendorIcon60x60"]]]
-		let pad = ["CFBundlePrimaryIcon": ["CFBundleIconFiles": [
-			"VendorIcon60x60", "VendorIcon76x76", "VendorIcon83.5x83.5",
-		]]]
-		plist["CFBundleIcons"] = phone
-		plist["CFBundleIcons~ipad"] = pad
+		let stems = ["VendorIcon60x60", "VendorIcon76x76", "VendorIcon83.5x83.5"]
+		plist["CFBundleIcons"] = ["CFBundlePrimaryIcon": ["CFBundleIconFiles": ["VendorIcon60x60"]]]
+		plist["CFBundleIcons~ipad"] = ["CFBundlePrimaryIcon": ["CFBundleIconFiles": stems]]
+		// The flat pre-iOS-5 key as well, pointed at the same files. Some readers
+		// still consult it, and leaving it behind pointing at the old artwork is
+		// worse than either removing it or setting it.
+		plist["CFBundleIconFiles"] = stems
 
 		// `CFBundleIconName` points into the compiled asset catalog, and iOS
 		// prefers it over any loose file. Left in place the app keeps its
 		// original artwork and the new PNGs are simply ignored, which reads as
 		// the feature silently doing nothing.
 		plist.removeValue(forKey: "CFBundleIconName")
-		plist.removeValue(forKey: "CFBundleIconFiles")
 		plist.removeValue(forKey: "CFBundleIconFile")
 
 		guard let out = try? PropertyListSerialization.data(
@@ -157,7 +157,7 @@ enum BundlePreparer {
 			try? fm.removeItem(at: frameworks.appendingPathComponent(name))
 		}
 
-		guard let executable = executableURL(of: bundle) else { return }
+		guard let executable = executableURL(of: bundle), isMachO(executable) else { return }
 		// Matching on the last path component rather than the whole string: a
 		// load command may be written @rpath, @executable_path or absolute, and
 		// the list the user ticked holds file names.
@@ -171,6 +171,29 @@ enum BundlePreparer {
 		}
 		guard !doomed.isEmpty else { return }
 		SigningEngine.remove(dylibs: doomed, fromExecutableAt: executable.path)
+	}
+
+	/// Whether the file opens with a Mach-O or fat-binary magic number.
+	///
+	/// Checked before asking the engine to list load commands: its `ListDylibs`
+	/// returns nil on a file it cannot parse and the Swift wrapper force-unwraps
+	/// that, so an unreadable executable takes the whole app down rather than
+	/// failing the step. Cheap insurance on a path the user reaches by ticking a
+	/// checkbox.
+	private static func isMachO(_ url: URL) -> Bool {
+		guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+		defer { try? handle.close() }
+		guard let head = try? handle.read(upToCount: 4), head.count == 4 else { return false }
+
+		let magic = head.withUnsafeBytes { $0.load(as: UInt32.self) }
+		switch magic {
+		case 0xFEED_FACE, 0xCEFA_EDFE,   // 32-bit, either byte order
+			 0xFEED_FACF, 0xCFFA_EDFE,   // 64-bit
+			 0xCAFE_BABE, 0xBEBA_FECA:   // fat
+			return true
+		default:
+			return false
+		}
 	}
 
 	private static func executableURL(of bundle: URL) -> URL? {
