@@ -159,14 +159,14 @@ extension View {
 	/// moved, which means the title arrives already out of focus. Keyed to each
 	/// row's own position, nothing is touched until it starts to leave.
 	///
-	/// Kept deliberately slight. Two points of blur and a quarter of the opacity
-	/// is enough to read as depth; more and it looks like the screen is broken
-	/// rather than like the middle is where you are meant to be looking.
+	/// Still a detail rather than an effect, but with enough weight to be seen
+	/// in motion: four points of blur and a third of the opacity. Past this the
+	/// edges stop reading as depth and start reading as a rendering fault.
 	func scrollEdgeSoftening() -> some View {
 		scrollTransition(.interactive, axis: .vertical) { view, phase in
 			view
-				.blur(radius: phase.isIdentity ? 0 : 2)
-				.opacity(phase.isIdentity ? 1 : 0.75)
+				.blur(radius: phase.isIdentity ? 0 : 4)
+				.opacity(phase.isIdentity ? 1 : 0.65)
 		}
 	}
 }
