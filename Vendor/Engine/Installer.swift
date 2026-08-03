@@ -49,6 +49,20 @@ final class Installer {
 		didSet { UserDefaults.standard.set(authorityInstalled, forKey: Self.trustKey) }
 	}
 
+	/// Whether this build runs on the simulator.
+	///
+	/// A stored value, not an `#if` at the point of use: the compiler treats
+	/// code after a conditional-compilation `throw` as unreachable and warns
+	/// about it, and that warning has to be read every build by whoever is
+	/// looking for a real one.
+	private static let isSimulator: Bool = {
+		#if targetEnvironment(simulator)
+		return true
+		#else
+		return false
+		#endif
+	}()
+
 	private static let trustKey = "vendor.authority.installed"
 	private static let keyTag = "com.leonardob8777bit.vendor.local-tls"
 	/// Bumped whenever the certificate's shape changes. A stored pair from an
@@ -105,9 +119,12 @@ final class Installer {
 		// call spends five seconds inside LaunchServices before giving up, and
 		// the whole screen is frozen for it — which reads as Vendor hanging
 		// rather than as the simulator being unable to install anything at all.
-		#if targetEnvironment(simulator)
-		throw InstallerError.simulatorUnsupported
-		#endif
+		//
+		// Read from a constant rather than throwing straight out of an `#if`:
+		// inside the conditional the compiler can see the whole rest of this
+		// method is unreachable in a simulator build, and says so — one warning
+		// on top of the hundred and sixty-odd the linker already contributes.
+		if Self.isSimulator { throw InstallerError.simulatorUnsupported }
 		shutdown?.cancel()
 		finishServing()
 		server.forgetRequests()
