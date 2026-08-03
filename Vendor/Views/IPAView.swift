@@ -159,7 +159,7 @@ struct IPAView: View {
 		// question the app can answer itself.
 		if let package = store.packages.first(where: { $0.id == id }),
 		   package.signedWithCertificateID == nil,
-		   let usable = certificates.certificates.first(where: { $0.isUsable }) {
+		   let usable = certificates.certificates.first(where: { $0.canSignNow }) {
 			store.setCertificate(usable.id, for: package)
 		}
 
@@ -265,8 +265,14 @@ struct IPAView: View {
 			failure = String(format: t("ipa.pickCertFirst"), item.name)
 			return
 		}
-		guard certificate.isUsable else {
-			failure = String(format: t("ipa.certRejected"), certificate.name)
+		// Expiry is checked here as well as in the picker. The picker stops it
+		// being chosen; this stops one that was chosen while still valid and
+		// went past its date before Sign was pressed.
+		guard certificate.canSignNow else {
+			failure = String(
+				format: t(certificate.isUsable ? "ipa.certExpired" : "ipa.certRejected"),
+				certificate.name
+			)
 			return
 		}
 
@@ -591,7 +597,7 @@ struct IPAView: View {
 	private func check(_ item: ImportedIPA) -> Preflight {
 		let usable = item.signedWithCertificateID
 			.flatMap { id in certificates.certificates.first { $0.id == id } }
-			.map(\.isUsable) ?? false
+			.map(\.canSignNow) ?? false
 
 		// Unpacked bundle plus the archive written back out, alongside the
 		// original that is never touched: about three times the package.
@@ -687,8 +693,13 @@ struct IPAView: View {
 								}
 							}
 							Spacer(minLength: 0)
-							if !cert.isUsable {
-								Badge(text: t("home.rejected"), tone: .bad)
+							if !cert.canSignNow {
+								// "Rejected" would be a lie about a certificate
+								// the engine was perfectly happy with.
+								Badge(
+									text: t(cert.isUsable ? "home.expired" : "home.rejected"),
+									tone: .bad
+								)
 							}
 						}
 						.padding(9)
@@ -696,8 +707,8 @@ struct IPAView: View {
 						.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 					}
 					.buttonStyle(.plain)
-					.disabled(!cert.isUsable)
-					.opacity(cert.isUsable ? 1 : 0.5)
+					.disabled(!cert.canSignNow)
+					.opacity(cert.canSignNow ? 1 : 0.5)
 				}
 			}
 		}

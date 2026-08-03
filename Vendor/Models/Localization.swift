@@ -331,6 +331,10 @@ enum Strings {
 			en: "%@ was rejected by the signing engine.",
 			es: "El motor de firma rechazó %@."
 		),
+		"ipa.certExpired": (
+			en: "%@ has expired. iOS will refuse to install anything signed with it.",
+			es: "%@ ha caducado. iOS rechazará instalar cualquier cosa firmada con él."
+		),
 		"ipa.pickIpaOnly":   (en: "Pick an .ipa file.", es: "Elige un archivo .ipa."),
 		"ipa.tweakTypeOnly": (
 			en: "Tweaks must be .dylib or .deb.",
