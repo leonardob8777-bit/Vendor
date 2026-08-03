@@ -45,6 +45,9 @@ struct CertificatesView: View {
 		// Not a `.sheet`: a system sheet is presented in its own window, so the
 		// screen behind it cannot be blurred, and it arrives by sliding up. Laid
 		// over the content it matches every other window in the app.
+		//
+		// Two `.animation` modifiers, and both are needed. This one sits before
+		// the overlay, so it reaches the screen underneath and carries the blur.
 		.animation(.easeInOut(duration: 0.25), value: isImporting)
 		.overlay {
 			if isImporting {
@@ -55,6 +58,11 @@ struct CertificatesView: View {
 				.transition(.opacity)
 			}
 		}
+		// And this one sits after it, so it reaches the overlay and carries the
+		// panel's fade. Without it the transition has nothing driving it: the
+		// panel arrived in a single frame while the blur took a quarter of a
+		// second behind it, and the two read as unrelated.
+		.animation(.easeInOut(duration: 0.25), value: isImporting)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content.
 		.toolbar(isImporting ? .hidden : .visible, for: .tabBar)
