@@ -238,6 +238,9 @@ struct AppsView: View {
 				.foregroundStyle(Color.inkPrimary)
 				.glassCircle(size: 34)
 		}
+		// Not `apps.tryAgain`: "Try again" answers a failure, and this control
+		// is there whether anything failed or not.
+		.accessibilityLabel(t("apps.reload"))
 	}
 
 	private var searchField: some View {

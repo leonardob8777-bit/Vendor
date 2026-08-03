@@ -293,6 +293,15 @@ enum Strings {
 			es: "Los paquetes firmados aparecerán aquí."
 		),
 		"ipa.import":       (en: "Import IPA",  es: "Importar IPA"),
+		"ipa.removeTweak":  (en: "Remove tweak", es: "Quitar tweak"),
+		"ipa.deleteConfirm": (en: "Delete this package?", es: "¿Eliminar este paquete?"),
+		"ipa.deleteConfirmDetail": (
+			en: "The imported file, the signed build and any tweaks go with it. This cannot be undone.",
+			es: "Se irán con él el archivo importado, la versión firmada y los tweaks. No se puede deshacer."
+		),
+		"common.delete":    (en: "Delete",      es: "Eliminar"),
+		"apps.reload":      (en: "Reload repositories", es: "Recargar repositorios"),
+		"task.readyDetail": (en: "%@ is ready.", es: "%@ está lista."),
 		"ipa.importing":    (en: "Importing…",  es: "Importando…"),
 		"ipa.certificate":  (en: "Signing certificate", es: "Certificado de firma"),
 		"ipa.noCertificates": (

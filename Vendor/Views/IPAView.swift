@@ -56,6 +56,13 @@ struct IPAView: View {
 	@State private var signedFile: URL?
 	/// The package that archive belongs to, needed to build the manifest.
 	@State private var lastSigned: ImportedIPA?
+	/// Package the delete confirmation is asking about.
+	///
+	/// The swipe on this same card asks for a deliberate 190pt drag before it
+	/// will delete. This button sat one tap away from the same outcome, and takes
+	/// more with it than the swipe implies — the signed build, the tweaks and the
+	/// custom icon go too, with nothing to undo it.
+	@State private var confirmingDelete: ImportedIPA?
 
 	var body: some View {
 		Screen(
@@ -131,6 +138,25 @@ struct IPAView: View {
 			}
 		}
 		.animation(.easeInOut(duration: 0.25), value: showingTrustSetup)
+		// A dialog rather than one of this app's floating panels: it is the
+		// system's own affordance for a destructive answer, it puts Delete in
+		// red where iOS users expect it, and it supplies its own Cancel.
+		.confirmationDialog(
+			t("ipa.deleteConfirm"),
+			isPresented: Binding(
+				get: { confirmingDelete != nil },
+				set: { if !$0 { confirmingDelete = nil } }
+			),
+			titleVisibility: .visible,
+			presenting: confirmingDelete
+		) { item in
+			Button(t("common.delete"), role: .destructive) {
+				store.delete(item)
+				if expanded == item.id { expanded = nil }
+			}
+		} message: { _ in
+			Text(t("ipa.deleteConfirmDetail"))
+		}
 		// The tab bar is the TabView's, so it draws above whatever a tab lays
 		// over its own content. Hiding it is what stops sharp chrome sitting on
 		// top of a panel that is meant to be floating free of the screen.
@@ -339,8 +365,16 @@ struct IPAView: View {
 				lastSigned = signed
 				expanded = nil
 			} catch {
-				// Only a failed signature leaves a build worth throwing away.
-				try? FileManager.default.removeItem(at: destination)
+				// Only what this run produced, and only when there was nothing
+				// there to begin with. Re-signing writes to the same path, so
+				// deleting it on any failure threw away the build that was
+				// already working — while the record kept its `signedAt`, so the
+				// card went on offering Install with no file behind it. A
+				// package that has never been signed has nothing to lose, and a
+				// half-written archive there is worth clearing.
+				if !item.isSigned {
+					try? FileManager.default.removeItem(at: destination)
+				}
 				Haptics.failure()
 				task.fail(error.localizedDescription)
 				return
@@ -800,6 +834,7 @@ struct IPAView: View {
 								.contentShape(Rectangle())
 						}
 						.buttonStyle(.plain)
+						.accessibilityLabel(t("ipa.removeTweak"))
 					}
 					.padding(9)
 					.background(.ultraThinMaterial)
@@ -859,7 +894,7 @@ struct IPAView: View {
 
 				Button {
 					Haptics.tap()
-					store.delete(item)
+					confirmingDelete = item
 				} label: {
 					Image(systemName: "trash")
 						.font(.system(size: 14, weight: .medium))

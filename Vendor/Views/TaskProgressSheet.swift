@@ -215,7 +215,10 @@ struct TaskProgressSheet: View {
 	private var subtitle: String {
 		if let failure = task.failure { return failure }
 		if task.stage == .done {
-			return task.completionDetail ?? "\(task.appName) is ready."
+			// Every route to `.done` supplies a detail today, so this fallback is
+			// latent — which is exactly how the sibling above it acquired the
+			// same fault and kept it.
+			return task.completionDetail ?? String(format: t("task.readyDetail"), task.appName)
 		}
 		// While iOS owns the screen, saying "keep Vendor open" is no help — the
 		// user is looking at a system prompt and needs to know it is theirs to

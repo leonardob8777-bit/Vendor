@@ -147,7 +147,16 @@ struct HomeView: View {
 					// <date>" directly beneath a red Rejected badge — the card
 					// contradicting itself about the only thing it is for.
 					if let expiry = cert.expiresAt, cert.isUsable {
-						let date = expiry.formatted(date: .abbreviated, time: .omitted)
+						// In the language picked in Vendor, not the phone's. The
+						// switch deliberately never touches the system, so
+						// `.formatted()` on its own printed "May 22, 2027" under
+						// "Válido hasta".
+						// Built in one expression: a view builder reads a mutation
+						// as a statement and refuses it.
+						let date = expiry.formatted(
+							Date.FormatStyle(date: .abbreviated, time: .omitted)
+								.locale(Localizer.shared.language.locale)
+						)
 						// Past-tense wording once the date has gone by.
 						Text(String(format: expiry > Date() ? t("home.validUntil") : t("home.expiredOn"), date))
 							.font(.system(size: 12, weight: .medium))
