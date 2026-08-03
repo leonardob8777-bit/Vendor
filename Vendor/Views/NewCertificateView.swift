@@ -17,7 +17,9 @@ extension UTType {
 }
 
 struct NewCertificateView: View {
-	@Environment(\.dismiss) private var dismiss
+	/// Called on close. Presented as an overlay rather than a sheet, so
+	/// there is no environment dismiss to reach for.
+	var dismiss: () -> Void
 	private let store = CertificateStore.shared
 
 	@State private var certificateFile: URL?
@@ -36,27 +38,95 @@ struct NewCertificateView: View {
 	}
 
 	var body: some View {
-		ZStack(alignment: .top) {
-			// No aurora here: this sheet sits over a screen that already draws
-			// one, and running two animated backdrops at once is what made the
-			// panel stutter on device.
-			Color.canvas.ignoresSafeArea()
+		ZStack {
+			// No dimming layer and no backdrop of its own: the caller blurs the
+			// screen behind through `Screen(contentBlur:)`, the same as every
+			// other floating window.
+			Color.clear
+				.ignoresSafeArea()
+				.contentShape(Rectangle())
+				.onTapGesture { if canLeaveByTappingAway { dismiss() } }
 
+			panel
+				.padding(.horizontal, 26)
+				.padding(.vertical, 100)
+		}
+		// Hiding the tab bar changes the bottom inset partway through the
+		// opening, and a panel measured against it settles downwards after it
+		// appears. See `AppDetailSheet`.
+		.ignoresSafeArea(edges: .bottom)
+	}
+
+	/// Tapping away closes it, unless that would throw work away.
+	///
+	/// The other floating windows have nothing to lose, so they always close.
+	/// This one holds two picked files and a typed password, and losing those to
+	/// a stray tap is worse than having to reach for the close button.
+	private var canLeaveByTappingAway: Bool {
+		!isSaving
+			&& certificateFile == nil
+			&& provisioningFile == nil
+			&& password.isEmpty
+			&& nickname.isEmpty
+	}
+
+	private var panel: some View {
+		ZStack(alignment: .topTrailing) {
 			ScrollView {
 				VStack(spacing: 16) {
-					topBar
 					heading
 					requiredFiles
 					certificateDetails
 					if let failure {
 						failureNote(failure)
 					}
+					saveButton
 				}
-				.padding(.horizontal, 16)
-				.padding(.top, 6)
-				.padding(.bottom, 28)
+				.padding(.horizontal, 18)
+				.padding(.top, 22)
+				.padding(.bottom, 26)
+			}
+			.scrollBounceBehavior(.basedOnSize)
+			.mask(
+				LinearGradient(
+					stops: [
+						.init(color: .black, location: 0),
+						.init(color: .black, location: 0.90),
+						.init(color: .black.opacity(0), location: 1),
+					],
+					startPoint: .top,
+					endPoint: .bottom
+				)
+			)
+
+			closeButton
+				.padding(.top, 14)
+				.padding(.trailing, 14)
+		}
+		.background {
+			ZStack {
+				RoundedRectangle(cornerRadius: 28, style: .continuous)
+					.fill(.ultraThinMaterial)
+				RoundedRectangle(cornerRadius: 28, style: .continuous)
+					.fill(
+						LinearGradient(
+							colors: [Color.brand.opacity(0.13), Color.mint.opacity(0.07)],
+							startPoint: .topLeading, endPoint: .bottomTrailing
+						)
+					)
+				RoundedRectangle(cornerRadius: 28, style: .continuous)
+					.strokeBorder(
+						LinearGradient(
+							colors: [.white.opacity(0.28), .white.opacity(0.05), Color.mint.opacity(0.18)],
+							startPoint: .topLeading, endPoint: .bottomTrailing
+						),
+						lineWidth: 1
+					)
 			}
 		}
+		.clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+		.shadow(color: .black.opacity(0.45), radius: 30, y: 16)
+		.shadow(color: Color.brand.opacity(0.20), radius: 36, y: 20)
 	}
 
 	// MARK: Picking
@@ -117,42 +187,45 @@ struct NewCertificateView: View {
 
 	// MARK: Chrome
 
-	private var topBar: some View {
-		HStack {
-			Button { dismiss() } label: {
-				Image(systemName: "xmark")
-					.font(.system(size: 14, weight: .bold))
-					.foregroundStyle(Color.inkPrimary)
-					.glassCircle(size: 38)
-			}
-
-			Spacer()
-
-			Button(action: save) {
-				HStack(spacing: 8) {
-					if isSaving {
-						ProgressView().tint(.white)
-					} else {
-						Text(t("certs.save"))
-							.font(.system(size: 15, weight: .semibold))
-						Image(systemName: "checkmark.circle.fill")
-							.font(.system(size: 17))
-					}
-				}
-				.foregroundStyle(.white)
-				.frame(minWidth: 104)
-				.padding(.leading, 18)
-				.padding(.trailing, 8)
-				.padding(.vertical, 10)
-				.background(
-					Capsule().fill(
-						LinearGradient(colors: [.mint, .mintDeep], startPoint: .leading, endPoint: .trailing)
-					)
-				)
-				.opacity(canSave ? 1 : 0.45)
-			}
-			.disabled(!canSave)
+	private var closeButton: some View {
+		Button(action: dismiss) {
+			Image(systemName: "xmark")
+				.font(.system(size: 13, weight: .bold))
+				.foregroundStyle(Color.inkPrimary)
+				.glassCircle(size: 34)
 		}
+		.accessibilityLabel(t("common.close"))
+	}
+
+	/// Full width at the foot of the form rather than in a bar at the top.
+	///
+	/// The close button now owns the corner, and a Save that sits above the
+	/// fields it saves reads as belonging to the screen rather than to the form.
+	private var saveButton: some View {
+		Button(action: save) {
+			HStack(spacing: 8) {
+				if isSaving {
+					ProgressView().controlSize(.small).tint(.white)
+				} else {
+					Image(systemName: "checkmark.circle.fill")
+						.font(.system(size: 15))
+				}
+				Text(t("certs.save"))
+					.font(.system(size: 15, weight: .bold))
+			}
+			.foregroundStyle(.white)
+			.frame(maxWidth: .infinity)
+			.padding(.vertical, 12)
+			.background(
+				Capsule().fill(
+					LinearGradient(colors: [.mint, .mintDeep], startPoint: .leading, endPoint: .trailing)
+				)
+			)
+			.opacity(canSave ? 1 : 0.45)
+		}
+		.buttonStyle(.plain)
+		.disabled(!canSave)
+		.padding(.top, 2)
 	}
 
 	private var heading: some View {
@@ -168,9 +241,9 @@ struct NewCertificateView: View {
 			}
 			Spacer(minLength: 0)
 			CertificateEmblem()
-				.frame(width: 96, height: 96)
+				.frame(width: 64, height: 64)
 		}
-		.padding(.top, 8)
+		.padding(.trailing, 40) // clears the close button
 	}
 
 	// MARK: Step 1
@@ -226,12 +299,14 @@ struct NewCertificateView: View {
 		action: @escaping () -> Void
 	) -> some View {
 		HStack(spacing: 12) {
-			GlyphTile(systemName: picked ? "checkmark.circle.fill" : glyph, tint: tint, size: 44)
+			GlyphTile(systemName: picked ? "checkmark.circle.fill" : glyph, tint: tint, size: 38)
 
 			VStack(alignment: .leading, spacing: 2) {
 				Text(title)
-					.font(.system(size: 15, weight: .semibold))
+					.font(.system(size: 14, weight: .semibold))
 					.foregroundStyle(Color.inkPrimary)
+					.lineLimit(1)
+					.minimumScaleFactor(0.8)
 				Text(detail)
 					.font(.system(size: 11.5))
 					.foregroundStyle(picked ? tint : Color.inkSecondary)
@@ -243,10 +318,11 @@ struct NewCertificateView: View {
 			Spacer(minLength: 6)
 
 			Button(action: action) {
-				Text(picked ? "Change" : "Import")
+				Text(picked ? t("certs.change") : t("certs.import"))
 					.font(.system(size: 13, weight: .semibold))
 					.foregroundStyle(tint)
-					.padding(.horizontal, 16)
+					.fixedSize()
+					.padding(.horizontal, 12)
 					.padding(.vertical, 8)
 					.background(Capsule().fill(tint.opacity(0.14)))
 			}

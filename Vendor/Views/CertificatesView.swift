@@ -20,7 +20,11 @@ struct CertificatesView: View {
 	}
 
 	var body: some View {
-		Screen(t("tab.certificates"), toolbar: AnyView(addButton)) {
+		Screen(
+			t("tab.certificates"),
+			toolbar: AnyView(addButton),
+			contentBlur: isImporting ? 16 : 0
+		) {
 			if store.certificates.isEmpty {
 				emptyState
 			} else {
@@ -38,9 +42,22 @@ struct CertificatesView: View {
 				}
 			}
 		}
-		.sheet(isPresented: $isImporting) {
-			NewCertificateView()
+		// Not a `.sheet`: a system sheet is presented in its own window, so the
+		// screen behind it cannot be blurred, and it arrives by sliding up. Laid
+		// over the content it matches every other window in the app.
+		.animation(.easeInOut(duration: 0.25), value: isImporting)
+		.overlay {
+			if isImporting {
+				NewCertificateView {
+					isImporting = false
+					store.reload()
+				}
+				.transition(.opacity)
+			}
 		}
+		// The tab bar is the TabView's, so it draws above anything a tab lays
+		// over its own content.
+		.toolbar(isImporting ? .hidden : .visible, for: .tabBar)
 		.onAppear { store.reload() }
 	}
 

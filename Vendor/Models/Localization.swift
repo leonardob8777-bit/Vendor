@@ -342,6 +342,8 @@ enum Strings {
 			es: "Deja la contraseña vacía si tu clave privada no la necesita."
 		),
 		"certs.save":       (en: "Save",     es: "Guardar"),
+		"certs.import":     (en: "Import",   es: "Importar"),
+		"certs.change":     (en: "Change",   es: "Cambiar"),
 		"certs.password":   (en: "Password", es: "Contraseña"),
 		"common.close":     (en: "Close",    es: "Cerrar"),
 		"guide.search":     (en: "Search guides...", es: "Buscar guías..."),
