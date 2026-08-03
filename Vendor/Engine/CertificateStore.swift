@@ -160,14 +160,13 @@ final class CertificateStore {
 			}
 		}.value
 
-		// The engine is the authority on whether this pair can actually sign.
-		// Detached because the engine is synchronous C++ that reaches out to
-		// Apple: on the main actor it would stall the screen while it waits.
+		// Checked locally rather than through the engine's revocation call, which
+		// segfaults on an uninitialised pointer — see `CertificateInspector` for
+		// the whole story. Detached because reading and decrypting the key is
+		// not instant and this is reached from the main actor.
 		let status = await Task.detached(priority: .userInitiated) {
-			await SigningEngine.inspectCertificate(
-				provisionPath: provisionPath.path,
-				certificatePath: p12Path.path,
-				password: password
+			CertificateInspector.inspect(
+				p12: p12Path, password: password, profile: provisionPath
 			)
 		}.value
 

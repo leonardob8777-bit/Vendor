@@ -390,6 +390,30 @@ enum Strings {
 		),
 		"certs.unknownTeam":  (en: "Unknown team",  es: "Equipo desconocido"),
 		"certs.defaultName":  (en: "Certificate",   es: "Certificado"),
+		"cert.unreadableKey": (
+			en: "The .p12 file could not be read.",
+			es: "No se pudo leer el archivo .p12."
+		),
+		"cert.wrongPassword": (
+			en: "That password does not open this .p12.",
+			es: "Esa contraseña no abre este .p12."
+		),
+		"cert.notAKey": (
+			en: "That file is not a .p12 key bundle.",
+			es: "Ese archivo no es un paquete de clave .p12."
+		),
+		"cert.keyRefused": (
+			en: "The system refused the key (code %d).",
+			es: "El sistema rechazó la clave (código %d)."
+		),
+		"cert.noIdentity": (
+			en: "The .p12 opened but holds no signing identity.",
+			es: "El .p12 se abrió pero no contiene ninguna identidad de firma."
+		),
+		"cert.profileExpired": (
+			en: "The provisioning profile has expired.",
+			es: "El perfil de aprovisionamiento ha caducado."
+		),
 		"certs.rejectedByEngine": (
 			en: "Rejected by the signing engine",
 			es: "Rechazado por el motor de firma"
