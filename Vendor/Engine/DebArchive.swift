@@ -79,7 +79,12 @@ enum DebArchive {
 			// GNU ar terminates names with a slash.
 			let name = rawName.hasSuffix("/") ? String(rawName.dropLast()) : rawName
 
-			guard let size = Int(ascii(header, 48, 10).trimmingCharacters(in: .whitespaces)) else {
+			// `Int("-1")` succeeds, and a negative size puts `end` behind
+			// `start`: the bounds check below still passes, and `subdata` traps
+			// on a range whose lower bound is above its upper one.
+			guard let size = Int(ascii(header, 48, 10).trimmingCharacters(in: .whitespaces)),
+				  size >= 0
+			else {
 				throw DebArchiveError.corrupt("bad member size")
 			}
 
@@ -155,7 +160,14 @@ enum DebArchive {
 		let tail = [UInt8](data.suffix(4))
 		let declared = Int(tail[0]) | Int(tail[1]) << 8 | Int(tail[2]) << 16 | Int(tail[3]) << 24
 
-		return decode(body, using: COMPRESSION_ZLIB, hint: max(declared, body.count * 4))
+		// Only a hint, and one the file being read gets to choose: four bytes
+		// saying four gigabytes would have this allocate four gigabytes before
+		// reading a single byte of the stream. Capped, because `decode` grows
+		// the buffer on its own when the first guess is too small — so the cap
+		// costs a retry at worst and can never truncate the result.
+		let guess = min(max(declared, body.count * 4), 256 << 20)
+
+		return decode(body, using: COMPRESSION_ZLIB, hint: guess)
 	}
 
 	/// Runs a one-shot decode, growing the buffer if the payload does not fit.
@@ -204,7 +216,10 @@ enum DebArchive {
 			let prefix = cString(header, 345, 155)
 			let full = prefix.isEmpty ? name : "\(prefix)/\(name)"
 
-			guard let size = Int(octal(header, 124, 12)) else {
+			// As in the ar header: negative parses, inverts the range and traps.
+			// Worse here — the cursor advance would also run backwards, so the
+			// loop never reaches the end of the data.
+			guard let size = Int(octal(header, 124, 12)), size >= 0 else {
 				throw DebArchiveError.corrupt("bad tar size")
 			}
 			let type = Character(UnicodeScalar(header[header.startIndex + 156]))
@@ -238,6 +253,15 @@ enum DebArchive {
 					)
 				case "1", "2":                         // hard link, symlink
 					let link = cString(header, 157, 100)
+					// The check above covers where an entry is written, not
+					// where a link points. Without this, a package can ship a
+					// link out of the destination and then a plain file
+					// underneath it — the file's own path holds no "..", so it
+					// passes, and the write follows the link outside.
+					let hops = link.split(separator: "/")
+					guard !link.hasPrefix("/"), !hops.contains("..") else {
+						throw DebArchiveError.corrupt("link escapes the destination")
+					}
 					try? fm.createDirectory(
 						at: target.deletingLastPathComponent(),
 						withIntermediateDirectories: true

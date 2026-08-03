@@ -68,6 +68,15 @@ enum ZipArchive {
 
 			if entry.isSymlink {
 				let link = String(decoding: contents, as: UTF8.self)
+				// `resolve` covers where an entry is written, not where a link
+				// points. Without this, an archive can ship a link out of the
+				// destination and then a plain file underneath it: that file's
+				// own path holds no "..", so it passes the check, and the write
+				// follows the link outside. Proven on a crafted archive — the
+				// payload landed outside the destination.
+				guard !link.hasPrefix("/"), !link.split(separator: "/").contains("..") else {
+					throw ZipArchiveError.corrupt("link escapes the destination")
+				}
 				try? fm.removeItem(at: target)
 				try fm.createSymbolicLink(atPath: target.path, withDestinationPath: link)
 				continue
