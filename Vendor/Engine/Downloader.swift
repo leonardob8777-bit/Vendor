@@ -58,6 +58,13 @@ final class Downloader {
 				)
 				defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
 
+				// The download does not stop the moment it is called off — it
+				// unwinds at its next suspension point, and by then the user may
+				// have tapped Get again. Filing the package here would put the
+				// abandoned attempt's copy on the shelf and drive the new
+				// attempt's ring, so this run has nothing left to do.
+				guard self.isCurrent(id, token) else { return }
+
 				// Unpacking is not instant on a large package, and a ring that
 				// drops back to nothing at 100% looks like a failure. It stays
 				// full until the package is filed.
@@ -67,6 +74,11 @@ final class Downloader {
 			} catch is CancellationError {
 				// Nothing to report: the user asked for this.
 			} catch {
+				// Same reason: an attempt that has been replaced must not raise
+				// an alert over the one that replaced it. Cancelling a download
+				// and starting it again put "download failed" on screen while the
+				// new one was still going.
+				guard self.isCurrent(id, token) else { return }
 				self.failures[id] = error.localizedDescription
 			}
 		}
@@ -97,6 +109,7 @@ final class Downloader {
 				self.progress[id] = 1
 				try await IPAStore.shared.importPackage(from: source, sourceID: id)
 			} catch {
+				guard self.isCurrent(id, token) else { return }
 				self.failures[id] = error.localizedDescription
 			}
 		}
@@ -114,6 +127,11 @@ final class Downloader {
 		let next = (generation[id] ?? 0) + 1
 		generation[id] = next
 		return next
+	}
+
+	/// Whether `token` still owns `id`, or something newer has claimed it.
+	private func isCurrent(_ id: String, _ token: Int) -> Bool {
+		generation[id] == token
 	}
 
 	/// Clears the state of a run, unless something newer has already claimed it.

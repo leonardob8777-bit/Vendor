@@ -65,6 +65,8 @@ final class InstallServer {
 	/// a write is not merely stale — it can fault.
 	private let lock = NSLock()
 	private var listener: NWListener?
+	/// Connections currently open, so stopping can close them too.
+	private var connections: [ObjectIdentifier: NWConnection] = [:]
 	private let queue = DispatchQueue(label: "vendor.install-server")
 
 	private(set) var port: UInt16 = 0
@@ -144,16 +146,34 @@ final class InstallServer {
 			throw InstallServerError.cannotListen("no port")
 		}
 
+		// Whatever was listening before this call has no route to it any more, and
+		// an NWListener nobody holds keeps its port for the life of the process.
+		// Normally there is nothing here — installing stops the server before it
+		// starts one — but two installs overlapping is enough to reach it.
+		lock.lock()
+		let previous = self.listener
 		self.listener = listener
 		self.port = assigned
+		lock.unlock()
+		previous?.cancel()
 	}
 
 	func stop() {
-		listener?.cancel()
-		listener = nil
 		lock.lock()
+		let listener = self.listener
+		let open = Array(connections.values)
+		self.listener = nil
+		connections = [:]
 		routes = [:]
 		lock.unlock()
+
+		listener?.cancel()
+		// Cancelling the listener only refuses new connections; one already
+		// accepted carries on to the end of the file it is sending. Left alone,
+		// tapping Cancel mid-install hands the whole package over anyway —
+		// measured at 60 MB of 60 MB delivered after the listener was gone — and
+		// the open file handle outlives the install that opened it.
+		for connection in open { connection.cancel() }
 	}
 
 	/// Publishes a file at `path`, e.g. "/app.ipa".
@@ -222,8 +242,28 @@ final class InstallServer {
 			connection.cancel()
 			return
 		}
+
+		lock.lock()
+		connections[ObjectIdentifier(connection)] = connection
+		lock.unlock()
+
+		connection.stateUpdateHandler = { [weak self] state in
+			switch state {
+			case .cancelled, .failed:
+				self?.forget(connection)
+			default:
+				break
+			}
+		}
+
 		connection.start(queue: queue)
 		receive(on: connection, buffer: Data())
+	}
+
+	private func forget(_ connection: NWConnection) {
+		lock.lock()
+		connections[ObjectIdentifier(connection)] = nil
+		lock.unlock()
 	}
 
 	/// True only when the peer's address is known and is not this device.

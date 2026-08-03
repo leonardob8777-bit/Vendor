@@ -47,6 +47,18 @@ struct ServerPack: Codable {
 	let notAfter: Date
 
 	var isUsable: Bool { notAfter > Date() }
+
+	/// Whether the material actually forms something TLS can present.
+	///
+	/// Well-formed JSON is not the same as a working certificate: a truncated
+	/// key or a certificate that does not decode leaves a pack that passes every
+	/// check above and then fails silently at the only moment it matters. Since
+	/// a fetched pack is cached and reused until it expires, believing one of
+	/// those means months of installs falling back to the manual trust step for
+	/// a reason nothing reports.
+	var isComplete: Bool {
+		!PEM.certificates(in: certificatePEM).isEmpty && PEM.privateKey(in: keyPEM) != nil
+	}
 }
 
 enum ServerPackStore {
@@ -61,7 +73,10 @@ enum ServerPackStore {
 	/// Returns a usable pack, refreshing from the network when the cached one
 	/// is missing or has run out.
 	static func current() async throws -> ServerPack {
-		if let cached = cached(), cached.isUsable { return cached }
+		// A cached pack that cannot form an identity is worse than none: it is in
+		// date, so nothing ever refetches it, and every install quietly takes the
+		// fallback path instead. Checking it here is what lets a bad one heal.
+		if let cached = cached(), cached.isUsable, cached.isComplete { return cached }
 
 		let fetched = try await fetch()
 		try? save(fetched)
@@ -108,9 +123,13 @@ enum ServerPackStore {
 		let key = first + second
 		guard key.contains("PRIVATE KEY") else { throw ServerPackError.malformed }
 
-		let expiry = (info["notAfter"] as? String).flatMap {
-			ISO8601DateFormatter.pack.date(from: $0)
-		} ?? Date().addingTimeInterval(60 * 60 * 24 * 30)
+		// A pack that does not say when it runs out still has to be given a date,
+		// because that date is the only thing that decides when a renewal is
+		// fetched. A month of assumed life means a certificate that stopped
+		// working weeks ago is never replaced; a day keeps installing working now
+		// and picks the next pack up tomorrow.
+		let expiry = (info["notAfter"] as? String).flatMap(date(from:))
+			?? Date().addingTimeInterval(60 * 60 * 24)
 
 		guard expiry > Date() else { throw ServerPackError.expired }
 
@@ -120,20 +139,42 @@ enum ServerPackStore {
 			? "vendor." + commonName.dropFirst(2)
 			: commonName
 
-		return ServerPack(
+		let pack = ServerPack(
 			host: host,
 			certificatePEM: certificate,
 			issuerPEM: issuer,
 			keyPEM: key,
 			notAfter: expiry
 		)
+		// Refusing it here rather than at the point of use keeps it out of the
+		// cache, which is what stops one bad fetch from lasting three months.
+		guard pack.isComplete else { throw ServerPackError.invalidMaterial }
+		return pack
+	}
+
+	/// The timestamp as the pack writes it, whether or not it carries fractions.
+	///
+	/// `ISO8601DateFormatter` matches the fractional part exactly as configured:
+	/// one that asks for it rejects `...T10:20:49Z`, and one that does not
+	/// rejects `...T10:20:49.000Z`. The pack sends fractions today, and reading
+	/// only that form leaves the whole expiry falling back to a guess the day it
+	/// stops.
+	private static func date(from text: String) -> Date? {
+		ISO8601DateFormatter.packWithFractions.date(from: text)
+			?? ISO8601DateFormatter.pack.date(from: text)
 	}
 }
 
 private extension ISO8601DateFormatter {
-	static let pack: ISO8601DateFormatter = {
+	static let packWithFractions: ISO8601DateFormatter = {
 		let formatter = ISO8601DateFormatter()
 		formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+		return formatter
+	}()
+
+	static let pack: ISO8601DateFormatter = {
+		let formatter = ISO8601DateFormatter()
+		formatter.formatOptions = [.withInternetDateTime]
 		return formatter
 	}()
 }
@@ -182,7 +223,16 @@ enum PEM {
 			let first = bytes[index]; index += 1
 			if first < 0x80 { return Int(first) }
 			let count = Int(first & 0x7F)
-			guard count > 0, index + count <= bytes.count else { return nil }
+			// Four bytes is more length than any key here can have, and refusing
+			// anything wider is what keeps the number that comes out positive.
+			// Read as a signed Int, eight bytes of 0xFF come back as -1: the
+			// cursor is then stepped *backwards* by the length that follows, and
+			// the next byte is read from before the start of the array. A
+			// hand-made PEM of `30 30 02 88 FF FF FF FF FF FF FF 00` was enough
+			// to take the whole app down with "Index out of range" — and since
+			// the pack is written to the cache before it is ever parsed, the
+			// crash came back on every launch after it.
+			guard count > 0, count <= 4, index + count <= bytes.count else { return nil }
 			var value = 0
 			for _ in 0..<count { value = value << 8 | Int(bytes[index]); index += 1 }
 			return value

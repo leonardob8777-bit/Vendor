@@ -147,11 +147,21 @@ final class Installer {
 			try await server.start(identity: try keychainIdentity(for: stored))
 		}
 
-		let manifest = try writeManifest(
-			for: item,
-			bundleID: bundleID,
-			packageURL: "https://\(host):\(server.port)/app.ipa"
-		)
+		// The server is listening from here on, so every way out of this method
+		// has to close it. Writing the manifest can fail — a full disk is enough
+		// — and leaving on that error used to leave the listener up with the
+		// package still routed, for as long as Vendor stayed running.
+		let manifest: URL
+		do {
+			manifest = try writeManifest(
+				for: item,
+				bundleID: bundleID,
+				packageURL: "https://\(host):\(server.port)/app.ipa"
+			)
+		} catch {
+			finishServing()
+			throw error
+		}
 
 		server.serve(package, at: "/app.ipa", mime: "application/octet-stream")
 		server.serve(manifest, at: "/manifest.plist", mime: "text/xml")
@@ -189,6 +199,14 @@ final class Installer {
 			}
 			// A breath of slack so installd closes the connection on its terms.
 			try? await Task.sleep(for: .seconds(2))
+			// Cancelled means someone else has taken the server over: either
+			// `abort()` or the next install, and both close it themselves before
+			// going on. Closing it here as well would land on whatever has
+			// started since — the sleeps above give up the main actor, so a
+			// second install can be several steps in by the time this runs, and
+			// it would lose its listener and its background time to a task that
+			// belongs to the install before it.
+			guard !Task.isCancelled else { return }
 			self?.finishServing()
 		}
 	}
