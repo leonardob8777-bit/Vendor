@@ -24,6 +24,14 @@ struct CertificateAura {
 	let bright: Color
 	/// The darker companion the bright tone falls away into.
 	let deep: Color
+	/// The palest of the three, for the travelling highlight on the rim.
+	///
+	/// Not white, which is what a specular highlight would really be. A white
+	/// segment moving along a green outline does not read as light crossing the
+	/// line — it reads as the line being cut and rejoining behind it. Keeping the
+	/// hue and dropping almost all the saturation leaves the outline one
+	/// unbroken colour that simply swells where the light is.
+	let glint: Color
 
 	/// Green, through gold, to red.
 	///
@@ -42,11 +50,13 @@ struct CertificateAura {
 		// that is light green over green, which is the pairing being after.
 		bright = Color(hue: hue, saturation: 0.52, brightness: 1.00)
 		deep   = Color(hue: max(hue - 0.03, 0), saturation: 0.94, brightness: 0.68)
+		glint  = Color(hue: hue, saturation: 0.20, brightness: 1.00)
 	}
 
-	private init(bright: Color, deep: Color) {
+	private init(bright: Color, deep: Color, glint: Color) {
 		self.bright = bright
 		self.deep = deep
+		self.glint = glint
 	}
 
 	/// Revoked, or past its date.
@@ -56,7 +66,8 @@ struct CertificateAura {
 	/// red gives it weight.
 	static let dead = CertificateAura(
 		bright: Color(hue: 0.995, saturation: 0.80, brightness: 0.98),
-		deep:   Color(hue: 0.962, saturation: 0.96, brightness: 0.36)
+		deep:   Color(hue: 0.962, saturation: 0.96, brightness: 0.36),
+		glint:  Color(hue: 0.995, saturation: 0.28, brightness: 1.00)
 	)
 
 	/// The two tones swept round a circle. One pass, not a repeat: alternating

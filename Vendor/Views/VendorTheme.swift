@@ -205,9 +205,13 @@ private struct CardSurface: ViewModifier {
 					// 3. Rim light: bright along the top-left edge, brand-tinted
 					//    along the bottom-right, so the panel reads as a solid
 					//    pane catching light rather than a flat tint.
-					if let aura {
-						RimShine(aura: aura, shape: shape, strength: strength, lineWidth: 1.4)
-					} else {
+					//
+					// A card with an aura gets no hard rim at all. A drawn
+					// outline is a line, and a line with a highlight running
+					// along it reads as a line breaking and rejoining rather
+					// than as something lit — which is exactly how it looked.
+					// The glow below is left to describe the edge on its own.
+					if aura == nil {
 						shape.strokeBorder(
 							LinearGradient(
 								colors: [
@@ -224,13 +228,14 @@ private struct CardSurface: ViewModifier {
 				}
 			}
 			.clipShape(shape)
-			// 4. The rim bleeding outward. Drawn after the clip on purpose:
-			//    inside it, the blur would be cut off at the very edge it is
-			//    meant to spill past, and the card would keep a hard outline.
+			// 4. The light around the panel, and the only thing describing its
+			//    edge. Drawn after the clip on purpose: inside it, the blur
+			//    would be cut off at the very edge it is meant to spill past,
+			//    and the card would keep the hard outline this replaces.
 			.overlay {
 				if let aura {
-					RimShine(aura: aura, shape: shape, strength: strength, lineWidth: 2)
-						.blur(radius: 5)
+					RimShine(aura: aura, shape: shape, strength: strength, lineWidth: 4)
+						.blur(radius: 8)
 						.allowsHitTesting(false)
 				}
 			}
@@ -301,10 +306,7 @@ private struct RimShine: View {
 				.init(color: aura.deep.opacity(0.85 * strength),   location: 0.00),
 				.init(color: aura.deep.opacity(0.85 * strength),   location: 0.28),
 				.init(color: aura.bright.opacity(1.00 * strength), location: 0.42),
-				// The glint. White rather than more of the bright tone: a
-				// specular highlight is the colour of the light, not of the
-				// thing it lands on, and it is what sells the whole effect.
-				.init(color: Color.white.opacity(0.95 * strength), location: 0.50),
+				.init(color: aura.glint.opacity(0.95 * strength),  location: 0.50),
 				.init(color: aura.bright.opacity(1.00 * strength), location: 0.58),
 				.init(color: aura.deep.opacity(0.85 * strength),   location: 0.72),
 				.init(color: aura.deep.opacity(0.85 * strength),   location: 1.00),
