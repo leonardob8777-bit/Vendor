@@ -56,11 +56,31 @@ struct SourceApp: Decodable, Identifiable {
 		return f.string(fromByteCount: bytes)
 	}
 
-	var iconLink: URL? { iconURL.flatMap(URL.init(string:)) }
+	var iconLink: URL? { iconURL.flatMap(Self.web) }
 
 	/// Newest download link the feed offers.
 	var downloadLink: URL? {
-		(versions?.first?.downloadURL ?? downloadURL).flatMap(URL.init(string:))
+		(versions?.first?.downloadURL ?? downloadURL).flatMap(Self.web)
+	}
+
+	/// A URL from a feed, accepted only if it addresses the web.
+	///
+	/// Everything here is written by whoever runs the repository, and one of the
+	/// shipped ones carries thousands of entries from many uploaders. `URLSession`
+	/// downloads `file://` perfectly happily, so a feed could name a path inside
+	/// this app's own container and have Vendor copy it onto the Imported shelf —
+	/// which lives in Documents, which is shared over the Files app. The
+	/// certificate store was deliberately moved out of Documents so a `.p12`
+	/// could not be picked up from there; a feed naming it would have put it
+	/// straight back. `SourceStore` already holds repository addresses to
+	/// http(s); the links inside a feed were never given the same treatment.
+	private static func web(_ text: String) -> URL? {
+		guard let url = URL(string: text),
+			  let scheme = url.scheme?.lowercased(),
+			  scheme == "https" || scheme == "http",
+			  url.host != nil
+		else { return nil }
+		return url
 	}
 
 	/// File name to store the package under. Feeds often point at redirects
