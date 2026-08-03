@@ -41,6 +41,7 @@ struct SourcesSheet: View {
 					header
 					field
 					if let failure { failureNote(failure) }
+					builtIns
 					list
 				}
 				.padding(.horizontal, 18)
@@ -193,6 +194,58 @@ struct SourcesSheet: View {
 		.padding(10)
 		.background(Color.warnSoft)
 		.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+	}
+
+	// MARK: Shipped repositories
+
+	/// Only the ones that need a decision. A repository that is simply on has
+	/// nothing to ask about, and a row for it would be noise.
+	@ViewBuilder
+	private var builtIns: some View {
+		let optIn = SourceLoader.defaultSources.filter(\.optIn)
+
+		if !optIn.isEmpty {
+			SectionLabel(text: t("sources.builtIn"))
+
+			ForEach(optIn, id: \.url) { entry in
+				let on = Binding(
+					get: { store.includes(entry.url) },
+					set: { store.setIncluded($0, for: entry.url) }
+				)
+
+				VStack(alignment: .leading, spacing: 6) {
+					HStack(spacing: 10) {
+						Image(systemName: "shippingbox.fill")
+							.font(.system(size: 13, weight: .light))
+							.foregroundStyle(Color.brand)
+
+						VStack(alignment: .leading, spacing: 1) {
+							Text(entry.url.host ?? entry.url.absoluteString)
+								.font(.system(size: 13, weight: .medium))
+								.foregroundStyle(Color.inkPrimary)
+								.lineLimit(1)
+							Text(store.includes(entry.url) ? t("sources.on") : t("sources.off"))
+								.font(.system(size: 10))
+								.foregroundStyle(store.includes(entry.url) ? Color.ok : Color.inkSecondary)
+						}
+
+						Spacer(minLength: 0)
+
+						Toggle("", isOn: on)
+							.labelsHidden()
+							.tint(Color.brand)
+					}
+
+					Text(t("sources.showAllNote"))
+						.font(.system(size: 10))
+						.foregroundStyle(Color.inkSecondary)
+						.fixedSize(horizontal: false, vertical: true)
+				}
+				.padding(10)
+				.background(.ultraThinMaterial)
+				.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+			}
+		}
 	}
 
 	// MARK: List

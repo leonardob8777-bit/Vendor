@@ -183,14 +183,30 @@ enum SourceLoaderError: LocalizedError {
 }
 
 enum SourceLoader {
-	/// Public repository the app ships with. Deliberately not tied to any
-	/// other signing app's project.
-	static let defaultSourceURL = URL(string: "https://community-apps.sidestore.io/sidecommunity.json")!
+	/// A repository shipped with the app.
+	struct BuiltIn {
+		let url: URL
+		/// Left out of the list until the user asks for it in the repositories
+		/// panel. For one that publishes thousands of entries, arriving switched
+		/// on would bury everything else on the screen.
+		let optIn: Bool
+	}
+
+	/// Repositories the app ships with. Deliberately not tied to any other
+	/// signing app's project.
+	static let defaultSources: [BuiltIn] = [
+		// Publishes every version of every app as its own entry: 8342 of them,
+		// which come to 783 once collapsed by identifier. Off unless asked for.
+		BuiltIn(url: URL(string: "https://repository.apptesters.org/")!, optIn: true),
+		BuiltIn(url: URL(string: "https://repo.ikghd.me/repo.json")!, optIn: false),
+	]
+
+	static var defaultSourceURLs: [URL] { defaultSources.map(\.url) }
 
 	/// Bundle identifiers never shown, whatever a source advertises.
 	private static let blocked: Set<String> = ["nya.asami.ksign"]
 
-	static func load(from url: URL = defaultSourceURL) async throws -> AppSource {
+	static func load(from url: URL) async throws -> AppSource {
 		var request = URLRequest(url: url)
 		request.cachePolicy = .reloadRevalidatingCacheData
 		request.timeoutInterval = 20

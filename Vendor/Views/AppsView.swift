@@ -7,11 +7,13 @@ import SwiftUI
 
 /// One repository that loaded, ready to render.
 struct LoadedSource: Identifiable {
-	/// Nil for the repository Vendor ships with.
+	/// The address it came from, which is what makes it unique — there is more
+	/// than one repository shipped with the app, so "built-in" is not an id.
+	let id: String
+	/// Nil for the repositories Vendor ships with.
 	let custom: CustomSource?
 	let source: AppSource
 
-	var id: String { custom?.id.uuidString ?? "built-in" }
 	var title: String { source.name ?? custom?.displayName ?? t("apps.source") }
 }
 
@@ -42,16 +44,23 @@ final class AppsViewModel {
 		var loaded: [LoadedSource] = []
 		var failed: [String] = []
 
-		do {
-			loaded.append(LoadedSource(custom: nil, source: try await SourceLoader.load()))
-		} catch {
-			// The built-in one failing is the only case worth taking over the
-			// screen, and only when nothing else is there to show.
-			if custom.isEmpty {
-				state = .failed(error.localizedDescription)
-				return
+		// The shipped repositories, in the order they are listed.
+		for entry in SourceLoader.defaultSources {
+			// An opt-in repository is not fetched at all until it is switched
+			// on: no request, no wait, nothing on the screen.
+			if entry.optIn && !SourceStore.shared.includes(entry.url) { continue }
+
+			if let source = try? await SourceLoader.load(from: entry.url) {
+				loaded.append(LoadedSource(id: entry.url.absoluteString, custom: nil, source: source))
+			} else {
+				failed.append(entry.url.host ?? entry.url.absoluteString)
 			}
-			failed.append(t("apps.source"))
+		}
+
+		// Only worth taking over the screen when nothing at all came back.
+		if loaded.isEmpty && custom.isEmpty {
+			state = .failed(t("apps.allSourcesFailed"))
+			return
 		}
 
 		await withTaskGroup(of: (CustomSource, AppSource?).self) { group in
@@ -63,7 +72,7 @@ final class AppsViewModel {
 			for await (entry, source) in group {
 				if let source {
 					SourceStore.shared.rename(entry.id, to: source.name)
-					loaded.append(LoadedSource(custom: entry, source: source))
+					loaded.append(LoadedSource(id: entry.id.uuidString, custom: entry, source: source))
 				} else {
 					failed.append(entry.displayName)
 				}
@@ -73,15 +82,13 @@ final class AppsViewModel {
 		// The built-in one first, then the rest in the order they were added —
 		// a task group finishes in whatever order the network decides, and a
 		// list that reshuffles itself on every refresh is unusable.
-		let order = custom.map(\.id)
-		loaded.sort { lhs, rhs in
-			switch (lhs.custom, rhs.custom) {
-			case (nil, _):  return true
-			case (_, nil):  return false
-			case (let l?, let r?):
-				return (order.firstIndex(of: l.id) ?? 0) < (order.firstIndex(of: r.id) ?? 0)
-			}
+		let shipped = SourceLoader.defaultSourceURLs.map(\.absoluteString)
+		let added = custom.map(\.id.uuidString)
+		func rank(_ entry: LoadedSource) -> Int {
+			if let i = shipped.firstIndex(of: entry.id) { return i }
+			return shipped.count + (added.firstIndex(of: entry.id) ?? 0)
 		}
+		loaded.sort { rank($0) < rank($1) }
 
 		unreachable = failed
 		state = .loaded(loaded)
@@ -140,9 +147,12 @@ struct AppsView: View {
 				if sections.isEmpty {
 					emptyState
 				} else {
+					// Lazy, not a plain VStack: one of the shipped repositories
+					// lists over eight thousand apps, and building every row up
+					// front freezes the tab on arrival.
 					ForEach(sections, id: \.0.id) { entry, apps in
 						sourceHeader(entry, count: apps.count)
-						VStack(spacing: 8) {
+						LazyVStack(spacing: 8) {
 							ForEach(apps) { app in
 								Button { inspecting = AppDetail(app) } label: {
 									row(for: app)

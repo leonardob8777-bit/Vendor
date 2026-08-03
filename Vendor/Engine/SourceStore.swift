@@ -42,6 +42,13 @@ final class SourceStore {
 
 	private(set) var sources: [CustomSource] = []
 
+	/// Shipped repositories the user has switched on, by address.
+	///
+	/// Kept in defaults rather than in `sources.json`: it is a preference about
+	/// a repository the app already carries, not a repository record, and
+	/// mixing the two would mean rewriting the file format for a checkbox.
+	private(set) var expanded: Set<String> = []
+
 	private let fm = FileManager.default
 
 	private var file: URL {
@@ -52,7 +59,20 @@ final class SourceStore {
 		return dir.appendingPathComponent("sources.json")
 	}
 
-	private init() { reload() }
+	private static let expandedKey = "vendor.sources.expanded"
+
+	private init() {
+		expanded = Set(UserDefaults.standard.stringArray(forKey: Self.expandedKey) ?? [])
+		reload()
+	}
+
+	/// Whether an opt-in repository has been switched on.
+	func includes(_ url: URL) -> Bool { expanded.contains(url.absoluteString) }
+
+	func setIncluded(_ on: Bool, for url: URL) {
+		if on { expanded.insert(url.absoluteString) } else { expanded.remove(url.absoluteString) }
+		UserDefaults.standard.set(Array(expanded), forKey: Self.expandedKey)
+	}
 
 	func reload() {
 		guard let data = try? Data(contentsOf: file) else { sources = []; return }
@@ -76,7 +96,7 @@ final class SourceStore {
 		else { throw SourceStoreError.notAURL }
 
 		guard !sources.contains(where: { $0.url == url }),
-			  url != SourceLoader.defaultSourceURL
+			  !SourceLoader.defaultSourceURLs.contains(url)
 		else { throw SourceStoreError.alreadyAdded }
 
 		let loaded: AppSource

@@ -168,6 +168,10 @@ enum Strings {
 			es: "Todavía no se puede descargar."
 		),
 		"apps.source":      (en: "Source",              es: "Fuente"),
+		"apps.allSourcesFailed": (
+			en: "No repository could be reached. Check your connection and pull to refresh.",
+			es: "No se pudo alcanzar ningún repositorio. Revisa la conexión y desliza para recargar."
+		),
 		"apps.sourceFailed": (
 			en: "%@ could not be loaded.",
 			es: "No se pudo cargar %@."
@@ -176,16 +180,23 @@ enum Strings {
 		// Repositories
 		"sources.title":  (en: "Repositories", es: "Repositorios"),
 		"sources.detail": (
-			en: "Add a repository to see its apps alongside the built-in one. It must publish an AltStore-format source.",
-			es: "Añade un repositorio para ver sus apps junto a las del incluido. Tiene que publicar una fuente en formato AltStore."
+			en: "Add a repository to see its apps alongside the ones already included. It must publish an AltStore-format source.",
+			es: "Añade un repositorio para ver sus apps junto a las de los ya incluidos. Tiene que publicar una fuente en formato AltStore."
 		),
 		"sources.placeholder": (en: "https://…/source.json", es: "https://…/source.json"),
 		"sources.add":      (en: "Add",        es: "Añadir"),
 		"sources.checking": (en: "Checking…",  es: "Comprobando…"),
 		"sources.added":    (en: "Added",      es: "Añadidos"),
+		"sources.builtIn":  (en: "Included with Vendor", es: "Incluidos en Vendor"),
+		"sources.on":  (en: "On · showing its apps", es: "Activo · mostrando sus apps"),
+		"sources.off": (en: "Off · not shown",       es: "Apagado · no se muestra"),
+		"sources.showAllNote": (
+			en: "Left off, Vendor shows only its own picks and the small repository. Turn this on to add every app this one publishes — there are thousands, and the Apps tab gets very long.",
+			es: "Apagado, Vendor muestra solo sus destacadas y el repositorio pequeño. Actívalo para añadir todas las apps que publica este — son miles, y la pestaña Apps se vuelve larguísima."
+		),
 		"sources.none": (
-			en: "None yet. Only the repository Vendor ships with is being shown.",
-			es: "Todavía ninguno. Solo se muestra el repositorio que trae Vendor."
+			en: "None yet. Only what Vendor ships with is being shown.",
+			es: "Todavía ninguno. Solo se muestra lo que trae Vendor."
 		),
 		"sources.remove":   (en: "Remove repository", es: "Quitar repositorio"),
 		"sources.notAURL": (
