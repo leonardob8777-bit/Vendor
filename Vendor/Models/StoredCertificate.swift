@@ -28,6 +28,13 @@ struct StoredCertificate: Identifiable, Codable, Equatable {
 	/// Message the engine attached to a failure.
 	var statusMessage: String?
 	var importedAt: Date
+	/// What the provisioning profile says this identity is for.
+	///
+	/// Filled in by the store when it loads, from the profile file beside the
+	/// key, and never written to `metadata.json` — reading it back from the
+	/// profile every time costs one small plist parse and cannot go stale. Nil
+	/// only when the profile will not parse.
+	var kind: ProvisioningProfile.Kind?
 
 	enum Health {
 		case valid(daysLeft: Int)
@@ -87,15 +94,45 @@ struct StoredCertificate: Identifiable, Codable, Equatable {
 		return .valid(daysLeft: days)
 	}
 
-	/// Grouping used by the certificates screen.
-	var group: String {
+	/// Which bucket the certificates screen files this under.
+	///
+	/// A value, not the heading text. The screen used to group on the heading
+	/// itself and then keep the buckets whose names appeared in a hard-coded
+	/// list of English words — so in Spanish nothing ever matched and the screen
+	/// went blank with certificates sitting in the store, and any bucket whose
+	/// English name was not in that list was dropped without a trace.
+	///
+	/// Which kind it is comes from the profile. The old test searched the issuer
+	/// for the word "distribution", and the issuer is the profile's TeamName — a
+	/// person's or company's name — so it never contained it: everything landed
+	/// under Developer, including certificates plainly named Distribution, and
+	/// Enterprise could not be reached at all.
+	enum Group: Int, CaseIterable, Hashable {
+		// Declaration order is display order.
+		case enterprise, distribution, developer, other, revoked
+
+		var title: String {
+			switch self {
+			case .enterprise:   return t("certs.groupEnterprise")
+			case .distribution: return t("certs.groupDistribution")
+			case .developer:    return t("certs.groupDeveloper")
+			case .other:        return t("certs.groupOther")
+			case .revoked:      return t("certs.groupRevoked")
+			}
+		}
+	}
+
+	var group: Group {
 		switch health() {
-		case .expired, .rejected: return t("certs.groupRevoked")
+		case .expired, .rejected:
+			return .revoked
 		default:
-			guard let issuer else { return t("certs.groupDeveloper") }
-			return issuer.localizedCaseInsensitiveContains("distribution")
-				? t("certs.groupEnterprise")
-				: t("certs.groupDeveloper")
+			switch kind {
+			case .development:  return .developer
+			case .distribution: return .distribution
+			case .enterprise:   return .enterprise
+			case nil:           return .other
+			}
 		}
 	}
 }

@@ -10,10 +10,12 @@ struct CertificatesView: View {
 	@State private var isImporting = false
 
 	/// Certificates bucketed the way the design groups them.
-	private var groups: [(title: String, items: [StoredCertificate])] {
-		let order = ["Enterprise", "Developer", "Revoked"]
+	///
+	/// Driven by `Group.allCases`, so a bucket cannot be left out by forgetting
+	/// to add its name somewhere, and nothing depends on the display language.
+	private var groups: [(group: StoredCertificate.Group, items: [StoredCertificate])] {
 		let buckets = Dictionary(grouping: store.certificates, by: \.group)
-		return order.compactMap { key in
+		return StoredCertificate.Group.allCases.compactMap { key in
 			guard let items = buckets[key], !items.isEmpty else { return nil }
 			return (key, items)
 		}
@@ -28,9 +30,9 @@ struct CertificatesView: View {
 			if store.certificates.isEmpty {
 				emptyState
 			} else {
-				ForEach(groups, id: \.title) { group in
+				ForEach(groups, id: \.group) { group in
 					VStack(alignment: .leading, spacing: 8) {
-						SectionLabel(text: group.title)
+						SectionLabel(text: group.group.title)
 							.scrollEdgeSoftening()
 						VStack(spacing: 8) {
 							ForEach(group.items) { item in
@@ -137,14 +139,23 @@ struct CertificatesView: View {
 	private func expiryBlock(for item: StoredCertificate) -> some View {
 		switch item.health() {
 		case .valid(let days):
-			expiry(caption: "Expires in", value: "\(days) days", tint: .ok)
+			expiry(caption: t("certs.expiresIn"), value: dayCount(days), tint: .ok)
 		case .expiring(let days):
-			expiry(caption: "Expires in", value: "\(days) days", tint: .warn)
+			expiry(caption: t("certs.expiresIn"), value: dayCount(days), tint: .warn)
 		case .expired(let days):
-			expiry(caption: "Expired", value: "\(days) days ago", tint: .bad)
+			expiry(
+				caption: t("certs.expiredCaption"),
+				value: String(format: t("certs.ago"), dayCount(days)),
+				tint: .bad
+			)
 		case .rejected:
-			expiry(caption: "Engine", value: "Rejected", tint: .bad)
+			expiry(caption: t("certs.engineCaption"), value: t("home.rejected"), tint: .bad)
 		}
+	}
+
+	/// "1 day" / "292 days", in the display language.
+	private func dayCount(_ days: Int) -> String {
+		"\(days) " + (days == 1 ? t("home.day") : t("home.days"))
 	}
 
 	private func expiry(caption: String, value: String, tint: Color) -> some View {

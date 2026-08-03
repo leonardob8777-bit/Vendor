@@ -250,7 +250,7 @@ struct NewCertificateView: View {
 
 	private var requiredFiles: some View {
 		VStack(alignment: .leading, spacing: 12) {
-			stepHeader(index: "1.", title: "Required Files")
+			stepHeader(index: "1.", title: t("certs.stepFiles"))
 
 			HStack(alignment: .top, spacing: 12) {
 				timeline
@@ -336,7 +336,7 @@ struct NewCertificateView: View {
 
 	private var certificateDetails: some View {
 		VStack(alignment: .leading, spacing: 12) {
-			stepHeader(index: "2.", title: "Certificate Details")
+			stepHeader(index: "2.", title: t("certs.stepDetails"))
 
 			field(glyph: "lock", tint: .mint) {
 				HStack(spacing: 8) {

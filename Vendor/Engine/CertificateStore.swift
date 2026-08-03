@@ -117,6 +117,10 @@ final class CertificateStore {
 				  var cert = try? decoder.decode(StoredCertificate.self, from: data)
 			else { return nil }
 
+			// Read from the profile rather than persisted, so a record written
+			// by an older build classifies correctly the first time it loads.
+			cert.kind = ProvisioningProfile.read(at: provisionURL(for: id))?.kind
+
 			if cert.password.isEmpty {
 				// Normal path. The file never holds one, so it comes from the
 				// keychain — or is genuinely empty, for an unprotected key.

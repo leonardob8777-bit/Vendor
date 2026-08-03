@@ -426,6 +426,16 @@ enum Strings {
 		"certs.groupRevoked":    (en: "Revoked",    es: "Revocados"),
 		"certs.groupDeveloper":  (en: "Developer",  es: "Desarrollador"),
 		"certs.groupEnterprise": (en: "Enterprise", es: "Empresarial"),
+		"certs.groupDistribution": (en: "Distribution", es: "Distribución"),
+		"certs.groupOther":      (en: "Other",      es: "Otros"),
+		"certs.expiresIn":       (en: "Expires in", es: "Caduca en"),
+		"certs.expiredCaption":  (en: "Expired",    es: "Caducado"),
+		"certs.engineCaption":   (en: "Engine",     es: "Motor"),
+		// Takes the whole "63 days" so the count keeps its plural and Spanish
+		// can put "hace" in front, where the word belongs.
+		"certs.ago":             (en: "%@ ago",     es: "hace %@"),
+		"certs.stepFiles":       (en: "Required Files",     es: "Archivos necesarios"),
+		"certs.stepDetails":     (en: "Certificate Details", es: "Datos del certificado"),
 
 		// Progress
 		"task.downloading": (en: "Downloading", es: "Descargando"),

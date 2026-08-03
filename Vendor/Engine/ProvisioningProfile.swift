@@ -15,6 +15,9 @@ struct ProvisioningProfile {
 	let expirationDate: Date?
 	let applicationIdentifier: String?
 	let devices: [String]
+	/// Set on an in-house profile, which is what "enterprise" actually means:
+	/// it installs on any device rather than on a listed set.
+	let provisionsAllDevices: Bool
 	/// The profile's own entitlements, verbatim.
 	///
 	/// A signed app has to carry the entitlements its profile grants, so adding
@@ -38,8 +41,29 @@ struct ProvisioningProfile {
 			expirationDate: plist["ExpirationDate"] as? Date,
 			applicationIdentifier: entitlements?["application-identifier"] as? String,
 			devices: plist["ProvisionedDevices"] as? [String] ?? [],
+			provisionsAllDevices: plist["ProvisionsAllDevices"] as? Bool ?? false,
 			entitlements: entitlements ?? [:]
 		)
+	}
+
+	/// What kind of profile this is.
+	///
+	/// Read from the two fields that actually carry the answer rather than from
+	/// the certificate's name. `get-task-allow` is what lets a debugger attach,
+	/// which only a development profile grants; `ProvisionsAllDevices` is what
+	/// makes a profile in-house. Everything else is a distribution profile, and
+	/// whether it lists devices only separates ad hoc from App Store — a
+	/// distinction with no consequence for signing.
+	enum Kind: String {
+		case development
+		case distribution
+		case enterprise
+	}
+
+	var kind: Kind {
+		if entitlements["get-task-allow"] as? Bool == true { return .development }
+		if provisionsAllDevices { return .enterprise }
+		return .distribution
 	}
 
 	/// Slices out the `<?xml … </plist>` payload embedded in the signature.
