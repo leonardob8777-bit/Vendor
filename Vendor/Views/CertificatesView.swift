@@ -84,6 +84,9 @@ struct CertificatesView: View {
 				.frame(width: 34, height: 34)
 				.background(Circle().fill(LinearGradient.brand))
 		}
+		// Announced as "plus" without this, which is the same thing the IPA
+		// screen's identical circle says while doing something else.
+		.accessibilityLabel(t("home.importCertificate"))
 	}
 
 	// MARK: Row

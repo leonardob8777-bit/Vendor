@@ -138,7 +138,14 @@ struct AppsView: View {
 				// A repository that could not be read is named rather than
 				// silently missing — otherwise adding a dead one looks like
 				// nothing happened at all.
-				ForEach(model.unreachable, id: \.self) { name in
+				//
+				// Indexed rather than keyed on the name, the same as the guide
+				// blocks. A repository is named by its feed, and falls back to its
+				// host when the feed does not say — so two of them added from one
+				// host, or two that report the same name, hand `ForEach` a
+				// repeated id. Losing a row there loses exactly the message this
+				// list exists to deliver.
+				ForEach(Array(model.unreachable.enumerated()), id: \.offset) { _, name in
 					CalloutRow(text: String(format: t("apps.sourceFailed"), name))
 				}
 

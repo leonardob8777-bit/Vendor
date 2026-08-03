@@ -77,6 +77,17 @@ struct IPAView: View {
 				.card(padding: 0)
 			}
 
+			// Above the shelf rather than after the last card on it. Every one of
+			// these answers something just tapped, and the button that was tapped
+			// is at the top of the screen — the plus in the toolbar, or Add
+			// inside an open card. Drawn at the foot of the list it landed a
+			// screen or more below any of them: picking a .txt by mistake read as
+			// the file browser simply closing again, with the reason on the
+			// screen the whole time and nowhere near where anyone was looking.
+			if let failure {
+				CalloutRow(text: failure).scrollEdgeSoftening()
+			}
+
 			if visible.isEmpty {
 				emptyState
 			} else {
@@ -95,10 +106,6 @@ struct IPAView: View {
 					// screen, so it would never come back into focus.
 					.scrollEdgeSoftening(expanded != item.id)
 				}
-			}
-
-			if let failure {
-				CalloutRow(text: failure)
 			}
 		}
 		.animation(.easeInOut(duration: 0.25), value: running == nil && !showingTrustSetup)
@@ -154,13 +161,20 @@ struct IPAView: View {
 		shelf = .all
 
 		// A package that has just been downloaded carries no certificate. If
-		// there is a usable one, put it on now: arriving at Install only to be
-		// told to pick a certificate — when there is exactly one to pick — is a
-		// question the app can answer itself.
-		if let package = store.packages.first(where: { $0.id == id }),
-		   package.signedWithCertificateID == nil,
-		   let usable = certificates.certificates.first(where: { $0.canSignNow }) {
-			store.setCertificate(usable.id, for: package)
+		// there is exactly one usable one, put it on now: arriving at Install
+		// only to be told to pick a certificate — when there is nothing to
+		// choose between — is a question the app can answer itself.
+		//
+		// Only when there is one. This took whichever came first out of the list
+		// and marked it as chosen, so with two identities imported the card
+		// opened with one of them already selected on no grounds at all — and
+		// selected is indistinguishable from picked. Signing under the wrong team
+		// is not a thing to be quietly volunteered into.
+		let usable = certificates.certificates.filter(\.canSignNow)
+		if usable.count == 1,
+		   let package = store.packages.first(where: { $0.id == id }),
+		   package.signedWithCertificateID == nil {
+			store.setCertificate(usable[0].id, for: package)
 		}
 
 		withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
@@ -340,8 +354,7 @@ struct IPAView: View {
 			do {
 				try await handOff(signed, task: task)
 			} catch {
-				Haptics.failure()
-				task.fail(error.localizedDescription)
+				reportInstallFailure(error, on: task)
 			}
 		}
 	}
@@ -359,13 +372,36 @@ struct IPAView: View {
 		signedFile = store.signedURL(for: item)
 
 		job = Task {
+			// Released the same way the signing run releases it. Without this the
+			// handle stayed set for the rest of the session once anything had been
+			// installed, and `sign` — which refuses to start while a handle is
+			// held — answered every later tap with "still finishing the previous
+			// run" for a job that ended minutes ago.
+			defer { job = nil }
 			do {
 				try await handOff(item, task: task)
 			} catch {
-				Haptics.failure()
-				task.fail(error.localizedDescription)
+				reportInstallFailure(error, on: task)
 			}
 		}
+	}
+
+	/// Puts a failed install on the panel — or, when the failure is one the app
+	/// can walk the user out of, opens the sheet that does.
+	///
+	/// Untrusted authority is the only failure of that kind, and it was also the
+	/// only way `TrustSetupSheet` was ever meant to appear. Nothing set the flag
+	/// that shows it, so the sheet explaining the two trips to Settings could not
+	/// be reached from anywhere in the app: the install stopped with a line
+	/// saying the certificate is not trusted yet and no way to go and trust it.
+	private func reportInstallFailure(_ error: Error, on task: AppTask) {
+		Haptics.failure()
+		if let reason = error as? InstallerError, case .authorityNotTrusted = reason {
+			running = nil
+			showingTrustSetup = true
+			return
+		}
+		task.fail(error.localizedDescription)
 	}
 
 	/// Gives up on the job the panel is showing. Offered only while it waits on
@@ -432,6 +468,10 @@ struct IPAView: View {
 				.frame(width: 34, height: 34)
 				.background(Circle().fill(LinearGradient.brand))
 		}
+		// A bare plus is announced as "plus" and says nothing about what it adds,
+		// and the same circle sits on the Certificates screen doing something
+		// else entirely.
+		.accessibilityLabel(t("ipa.import"))
 	}
 
 	// MARK: Package card
@@ -751,7 +791,15 @@ struct IPAView: View {
 							Image(systemName: "xmark")
 								.font(.system(size: 10, weight: .bold))
 								.foregroundStyle(Color.inkSecondary)
+								// The glyph draws at 10pt, which is a target barely
+								// a fifth of the 44pt Apple asks for — and it throws
+								// a file away. Same enlargement the repository list
+								// was given; it also brings the row up to the height
+								// of the certificate rows above it in this card.
+								.frame(width: 44, height: 44)
+								.contentShape(Rectangle())
 						}
+						.buttonStyle(.plain)
 					}
 					.padding(9)
 					.background(.ultraThinMaterial)
@@ -770,6 +818,13 @@ struct IPAView: View {
 	private func actions(_ item: ImportedIPA) -> some View {
 		let ready = item.isSigned
 			&& FileManager.default.fileExists(atPath: store.signedURL(for: item).path)
+		// Same rule as the pill on the row, and for a stronger reason down here.
+		// Signing with no certificate only ever set `failure`, and this button is
+		// at the foot of a card that is taller than the screen on its own — so
+		// the answer appeared somewhere the user had no way of seeing, and the
+		// tap read as doing nothing at all. Flat and unpressable says it where
+		// the hand already is, with the reason in the preflight row just above.
+		let blocked = !ready && !check(item).canSign
 
 		return VStack(spacing: 10) {
 			HStack(spacing: 10) {
@@ -794,10 +849,13 @@ struct IPAView: View {
 						}
 					}
 					.shadow(
-						color: (ready ? Color.installGlow : Color.brand).opacity(0.48),
+						color: (ready ? Color.installGlow : Color.brand).opacity(blocked ? 0 : 0.48),
 						radius: 11, y: 4
 					)
+					.saturation(blocked ? 0 : 1)
+					.opacity(blocked ? 0.45 : 1)
 				}
+				.disabled(blocked)
 
 				Button {
 					Haptics.tap()
