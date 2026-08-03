@@ -126,24 +126,42 @@ enum ZipReader {
 	/// Raw DEFLATE, which is what ZIP stores (no zlib header or trailer).
 	private static func inflate(_ data: Data, expectedSize: Int) -> Data? {
 		guard expectedSize > 0 else { return Data() }
-		// Slack covers archives that under-report the size.
-		let capacity = expectedSize + 4096
-		var output = Data(count: capacity)
 
-		let written: Int = output.withUnsafeMutableBytes { dst -> Int in
-			guard let dstBase = dst.bindMemory(to: UInt8.self).baseAddress else { return 0 }
-			return data.withUnsafeBytes { src -> Int in
-				guard let srcBase = src.bindMemory(to: UInt8.self).baseAddress else { return 0 }
-				return compression_decode_buffer(
-					dstBase, capacity,
-					srcBase, data.count,
-					nil, COMPRESSION_ZLIB
-				)
+		// DEFLATE cannot expand its input by more than about 1032:1, so this is
+		// a real ceiling on what the entry can be holding rather than a guess,
+		// and it is what keeps the retry below from growing without end.
+		let ceiling = data.count * 1032 + 4096
+		var capacity = min(expectedSize + 4096, ceiling)
+
+		// A buffer filled to its last byte is indistinguishable from one that ran
+		// out of room, and the size it was built from is the archive's own claim
+		// about itself. Taking that claim at face value wrote every file short by
+		// whatever the central directory chose to under-report — the unpack still
+		// reported success, the bundle was signed and packaged, and nothing
+		// anywhere said a byte had been lost. Proven on a crafted .ipa: an entry
+		// declaring 100 kB for a 200 kB file came out 95 904 bytes short.
+		while true {
+			var output = Data(count: capacity)
+
+			let written: Int = output.withUnsafeMutableBytes { dst -> Int in
+				guard let dstBase = dst.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+				return data.withUnsafeBytes { src -> Int in
+					guard let srcBase = src.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+					return compression_decode_buffer(
+						dstBase, capacity,
+						srcBase, data.count,
+						nil, COMPRESSION_ZLIB
+					)
+				}
 			}
-		}
 
-		guard written > 0 else { return nil }
-		return output.prefix(written)
+			guard written > 0 else { return nil }
+			if written < capacity { return output.prefix(written) }
+			// An exact fill at the ceiling cannot be an honest stream, so there is
+			// nothing left to retry with and the entry is not to be trusted.
+			guard capacity < ceiling else { return nil }
+			capacity = min(capacity * 4, ceiling)
+		}
 	}
 
 	// MARK: Byte helpers

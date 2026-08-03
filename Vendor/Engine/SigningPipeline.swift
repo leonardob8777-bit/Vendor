@@ -203,6 +203,20 @@ enum SigningPipeline {
 		}
 
 		for dylib in dylibs {
+			// Nothing has vouched for this file yet. A .dylib reaches here on the
+			// strength of its extension alone — whatever the user picked, or
+			// whatever `harvest` found by name inside a .deb — and the very next
+			// step hands it to the engine to have its jailbreak paths rewritten.
+			// `ListDylibs` returns nil for anything it cannot open and the Swift
+			// wrapper force-unwraps that, so a dangling symlink (the shape every
+			// Debian package uses for a versioned library), a truncated download
+			// or a text file with the wrong extension takes the whole app down
+			// mid-signature. Asked before the bundle is touched, so a bad tweak
+			// costs an error and nothing else.
+			guard BundlePreparer.isMachO(dylib) else {
+				throw SigningPipelineError.injectionFailed(dylib.lastPathComponent)
+			}
+
 			let destination = frameworks.appendingPathComponent(dylib.lastPathComponent)
 			try? fm.removeItem(at: destination)
 			try fm.copyItem(at: dylib, to: destination)

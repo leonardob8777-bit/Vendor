@@ -198,11 +198,15 @@ enum BundlePreparer {
 	/// step. There is no way to catch that from here — the only defence is not
 	/// making the call.
 	///
+	/// Shared with `SigningPipeline`, which has to ask the same question about a
+	/// tweak's dylib before handing it to the engine to have its jailbreak paths
+	/// rewritten.
+	///
 	/// The size floor matters as much as the magic. A four-byte file holding
 	/// nothing but `CA FE BA BE` passes a magic test and still crashes the
 	/// engine, which is exactly how this was first hit. No real app binary is
 	/// anywhere near this small.
-	private static func isMachO(_ url: URL) -> Bool {
+	static func isMachO(_ url: URL) -> Bool {
 		guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
 			  let size = attributes[.size] as? Int,
 			  size >= 4096

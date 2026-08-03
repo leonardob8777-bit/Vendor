@@ -111,13 +111,38 @@ enum ZipArchive {
 
 	/// Archives everything inside `directory` into `archive`.
 	///
-	/// Entries are written straight to the output file as they are produced, so
-	/// peak memory stays at roughly one file rather than the whole package.
+	/// Built under a temporary name and moved into place only once the last byte
+	/// is down. Writing straight to `archive` left a half-written file sitting
+	/// where a signed build belongs for as long as packing took, and nothing that
+	/// reads it afterwards can tell a truncated archive from a whole one. Signing
+	/// a package a second time destroys the previous build before it starts, so
+	/// being killed in that window — backgrounded partway through a large
+	/// package, say — left the record still saying a build was there and a
+	/// fragment of one on disk to hand to iOS.
 	static func pack(_ directory: URL, into archive: URL) throws {
 		let fm = FileManager.default
+		let staging = archive.deletingLastPathComponent()
+			.appendingPathComponent(".\(archive.lastPathComponent).part")
+
+		try? fm.removeItem(at: staging)
+		defer { try? fm.removeItem(at: staging) }
+
+		try write(directory, to: staging, reportingAs: archive.lastPathComponent)
+
 		try? fm.removeItem(at: archive)
+		do {
+			try fm.moveItem(at: staging, to: archive)
+		} catch {
+			throw ZipArchiveError.cannotWrite(archive.lastPathComponent)
+		}
+	}
+
+	/// Entries are written straight to the output file as they are produced, so
+	/// peak memory stays at roughly one file rather than the whole package.
+	private static func write(_ directory: URL, to archive: URL, reportingAs label: String) throws {
+		let fm = FileManager.default
 		guard fm.createFile(atPath: archive.path, contents: nil) else {
-			throw ZipArchiveError.cannotWrite("could not create \(archive.lastPathComponent)")
+			throw ZipArchiveError.cannotWrite("could not create \(label)")
 		}
 
 		let handle = try FileHandle(forWritingTo: archive)
@@ -130,7 +155,7 @@ enum ZipArchive {
 			do {
 				try handle.write(contentsOf: data)
 			} catch {
-				throw ZipArchiveError.cannotWrite(archive.lastPathComponent)
+				throw ZipArchiveError.cannotWrite(label)
 			}
 		}
 

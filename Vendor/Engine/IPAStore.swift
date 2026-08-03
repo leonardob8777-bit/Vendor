@@ -154,6 +154,15 @@ final class IPAStore {
 
 	/// Copying and parsing happen off the main actor: both are file-system
 	/// bound, and running them inline froze the UI for the whole import.
+	///
+	/// The method itself is pinned to the main actor even so. Without that it is
+	/// simply not isolated, and an `async` method that is not isolated does not
+	/// run on its caller's actor — it runs on the cooperative pool. `reload()` at
+	/// the end therefore replaced `packages` from a background thread while the
+	/// shelf was reading it on the main one. The work that has to be off the main
+	/// thread is already off it, inside the detached task below; what came back
+	/// from it does not.
+	@MainActor
 	@discardableResult
 	func importPackage(from source: URL, sourceID: String? = nil) async throws -> ImportedIPA {
 		let id = UUID()
@@ -216,6 +225,10 @@ final class IPAStore {
 	}
 
 	/// Adds a tweak (.dylib or .deb) to a package's injection list.
+	///
+	/// On the main actor for the same reason as `importPackage`: the copy is
+	/// detached, the update to `packages` is not.
+	@MainActor
 	func addTweak(_ source: URL, to item: ImportedIPA) async throws {
 		var updated = item
 		let destination = tweaksFolder(for: item.id).appendingPathComponent(source.lastPathComponent)

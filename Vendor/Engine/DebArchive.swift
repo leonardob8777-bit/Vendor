@@ -223,7 +223,14 @@ enum DebArchive {
 				throw DebArchiveError.corrupt("bad tar size")
 			}
 			let type = Character(UnicodeScalar(header[header.startIndex + 156]))
-			let mode = mode_t(Int(octal(header, 100, 8)) ?? 0o644)
+
+			// The size field is not the only number a crafted header can put out
+			// of range. `mode_t` is sixteen bits and this field is eight octal
+			// digits, so a header reading 7777777 — or -1, which parses just as
+			// happily — traps on the conversion and takes the app down. Only the
+			// permission bits are wanted a few lines below, so anything that does
+			// not fit is not a mode at all and the default stands.
+			let mode = Int(octal(header, 100, 8)).flatMap { mode_t(exactly: $0) } ?? 0o644
 
 			let body = cursor + 512
 			let end = body + size
