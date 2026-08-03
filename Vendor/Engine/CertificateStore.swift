@@ -191,8 +191,20 @@ final class CertificateStore {
 			importedAt: Date()
 		)
 
-		try write(cert)
-		reload()
+		// Back on the main actor to publish the result.
+		//
+		// This method is not actor-isolated, so awaiting the detached tasks
+		// above hands the rest of it to the cooperative pool — the caller
+		// starts on the main actor and does not return to it. `reload()`
+		// replaces `certificates`, which is `@Observable` state that the Home,
+		// IPA and Certificates screens are all reading, so leaving it there
+		// invalidated live views from a background thread every time somebody
+		// imported a certificate. Every other entry point into this store is a
+		// view calling it directly, and so already on the main actor.
+		try await MainActor.run {
+			try write(cert)
+			reload()
+		}
 		return cert
 	}
 

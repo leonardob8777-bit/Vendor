@@ -17,6 +17,46 @@ struct AppSource: Decodable {
 	let apps: [SourceApp]
 }
 
+/// Written in an extension so the memberwise initialiser survives — `SourceLoader`
+/// rebuilds one of these field by field after filtering.
+extension AppSource {
+
+	private enum CodingKeys: String, CodingKey {
+		case name, identifier, iconURL, apps
+	}
+
+	/// One unusable entry costs that entry, not the repository.
+	///
+	/// The header above promises a partial entry degrades instead of failing the
+	/// whole feed, and it did not: `apps` decoded as a plain array, so a single
+	/// object missing `name` — out of the 8343 that one shipped repository
+	/// carries, written by as many different uploaders — threw, and the user got
+	/// "The source did not return a readable app list" with every one of the
+	/// other 8342 discarded behind it. Nothing in a feed is ours to trust on
+	/// this, and one uploader should not be able to take down the list for
+	/// everybody else.
+	///
+	/// `apps` itself stays required. It is the only thing separating a
+	/// repository from any other JSON the address happens to serve, and
+	/// `SourceStore.add` leans on the decode failing to reject a typo.
+	init(from decoder: Decoder) throws {
+		let c = try decoder.container(keyedBy: CodingKeys.self)
+		name       = try c.decodeIfPresent(String.self, forKey: .name)
+		identifier = try c.decodeIfPresent(String.self, forKey: .identifier)
+		iconURL    = try c.decodeIfPresent(String.self, forKey: .iconURL)
+		apps       = try c.decode([Lenient<SourceApp>].self, forKey: .apps).compactMap(\.value)
+	}
+}
+
+/// An element that is allowed to fail without taking the array with it.
+private struct Lenient<Wrapped: Decodable>: Decodable {
+	let value: Wrapped?
+
+	init(from decoder: Decoder) throws {
+		value = try? Wrapped(from: decoder)
+	}
+}
+
 struct SourceApp: Decodable, Identifiable {
 	let name: String
 	let bundleIdentifier: String
@@ -103,14 +143,41 @@ struct SourceApp: Decodable, Identifiable {
 	}
 
 	/// Release date rendered for display, when the feed supplies a valid one.
+	///
+	/// A bare calendar date is what the repositories actually publish —
+	/// "2026-08-03", with no time on it at all — and `ISO8601DateFormatter`
+	/// refuses that unless it is told to expect it. Both shipped feeds fell
+	/// through to nil on every single entry, all 8343 of one and all 3 of the
+	/// other, so the Released row was never shown for any app in the app.
+	///
+	/// Parsed and rendered in the same fixed zone. A date with no time is read
+	/// as midnight UTC, and printing that in a zone behind UTC lands on the day
+	/// before: without pinning it, every reader in the Americas would have seen
+	/// each release dated one day early.
 	var releasedOn: String? {
-		guard let raw = versionDate else { return nil }
-		let iso = ISO8601DateFormatter()
-		iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-		let date = iso.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
-		guard let date else { return nil }
-		return date.formatted(date: .abbreviated, time: .omitted)
+		guard let raw = versionDate?.trimmingCharacters(in: .whitespacesAndNewlines),
+			  !raw.isEmpty
+		else { return nil }
+
+		let parser = ISO8601DateFormatter()
+		parser.timeZone = Self.dateZone
+
+		let accepted: [ISO8601DateFormatter.Options] = [
+			[.withInternetDateTime, .withFractionalSeconds],
+			[.withInternetDateTime],
+			[.withFullDate],
+		]
+		guard let date = accepted.lazy.compactMap({ options -> Date? in
+			parser.formatOptions = options
+			return parser.date(from: raw)
+		}).first else { return nil }
+
+		var style = Date.FormatStyle(date: .abbreviated, time: .omitted)
+		style.timeZone = Self.dateZone
+		return date.formatted(style.locale(Localizer.shared.language.locale))
 	}
+
+	private static let dateZone = TimeZone(secondsFromGMT: 0) ?? .gmt
 
 	/// Release notes with the markdown headings feeds tend to embed stripped out.
 	var releaseNotes: String? {

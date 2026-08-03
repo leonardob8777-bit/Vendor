@@ -42,13 +42,22 @@ struct FeaturedApp: Identifiable {
 	}
 }
 
+/// Every one of these is a computed `var`, not a stored `let`.
+///
+/// The summaries go through the string table, and a stored static is built once
+/// on first use and then never again — so whichever language the Apps tab was
+/// first opened in was the language these blurbs kept for the rest of the run,
+/// while everything around them switched. Rebuilt on each read they follow the
+/// picker like the rest of the app, which is the same reason `GuideContent`
+/// spells its entries out as `var`. `id` is a fixed slug, so `ForEach` sees the
+/// same identity across rebuilds.
 extension FeaturedApp {
 	/// System tweaking toolkit, distributed as a raw .ipa to sign yourself.
-	static let lara = FeaturedApp(
+	static var lara: FeaturedApp { FeaturedApp(
 		id: "lara",
 		name: "Lara",
 		developer: "Leonardo Bt",
-		summary: "Toolkit for tweaking iOS system settings and behaviour.",
+		summary: t("featured.lara.summary"),
 		badges: [("HOT", .hot)],
 		glow: .gold,
 		iconURL: URL(string: "https://leonardob8777-bit.github.io/assets/lara.png"),
@@ -56,15 +65,15 @@ extension FeaturedApp {
 		downloadURL: URL(string: "https://leonardob8777-bit.github.io/apps/lara.ipa")!,
 		size: 6_928_874,
 		version: nil
-	)
+	) }
 
 	/// Tweak runner built on the DarkSword kernel exploit. Open source,
 	/// AGPL-3.0, released on GitHub.
-	static let cyanide = FeaturedApp(
+	static var cyanide: FeaturedApp { FeaturedApp(
 		id: "cyanide",
 		name: "Cyanide",
 		developer: "0xjohnnydev",
-		summary: "Tweak runner for iOS built on the DarkSword kernel exploit.",
+		summary: t("featured.cyanide.summary"),
 		badges: [("POPULAR", .popular)],
 		glow: .brand,
 		iconURL: URL(string: "https://raw.githubusercontent.com/0xjohnnydev/cyanide/main/Cyanide/Assets.xcassets/AppIcon.appiconset/icon-ios-1024x1024.png"),
@@ -72,15 +81,15 @@ extension FeaturedApp {
 		downloadURL: URL(string: "https://github.com/0xjohnnydev/cyanide/releases/download/v1.3.6/Cyanide-1.3.6.ipa")!,
 		size: 7_895_202,
 		version: "1.3.6"
-	)
+	) }
 
 	/// Sibling of Cyanide — same DarkSword base, separate fork, released
 	/// within the last few days, which is what earns the NEW chip.
-	static let infern0 = FeaturedApp(
+	static var infern0: FeaturedApp { FeaturedApp(
 		id: "infern0",
 		name: "Infern0",
 		developer: "Nnnnnnn274",
-		summary: "Sibling build of Cyanide, on the same DarkSword base.",
+		summary: t("featured.infern0.summary"),
 		badges: [("HOT", .hot), ("NEW", .new)],
 		glow: Color(red: 1.00, green: 0.42, blue: 0.21),
 		iconURL: URL(string: "https://raw.githubusercontent.com/Nnnnnnn274/Infern0/main/Infern0/Assets.xcassets/AppIcon.appiconset/icon-ios-1024x1024.png"),
@@ -88,16 +97,16 @@ extension FeaturedApp {
 		downloadURL: URL(string: "https://github.com/Nnnnnnn274/Infern0/releases/download/4.0.0/Infern0-4.0.0.ipa")!,
 		size: 13_712_761,
 		version: "4.0.0"
-	)
+	) }
 
 	/// Free Fire client with the DarkSword patches applied. Metadata read from
 	/// the package itself rather than typed in, so the row matches what
 	/// actually installs.
-	static let ffds = FeaturedApp(
+	static var ffds: FeaturedApp { FeaturedApp(
 		id: "ffds",
 		name: "FF DS",
 		developer: "DarkSword",
-		summary: "Patched Free Fire client built on the DarkSword base.",
+		summary: t("featured.ffds.summary"),
 		badges: [("HOT", .hot), ("EPIC", .epic)],
 		glow: .gold,
 		iconURL: nil,
@@ -106,13 +115,13 @@ extension FeaturedApp {
 		downloadURL: URL(string: "https://leonardob8777-bit.github.io/apps/FF_Darksword_crack.ipa")!,
 		size: 1_843_116,
 		version: "1.5.2"
-	)
+	) }
 
-	static let turbomax = FeaturedApp(
+	static var turbomax: FeaturedApp { FeaturedApp(
 		id: "turbomax",
 		name: "TurboMax",
 		developer: "DarkSword",
-		summary: "Performance tuner from the DarkSword games line.",
+		summary: t("featured.turbomax.summary"),
 		badges: [("HOT", .hot), ("EPIC", .epic)],
 		glow: .gold,
 		iconURL: nil,
@@ -121,7 +130,7 @@ extension FeaturedApp {
 		downloadURL: URL(string: "https://leonardob8777-bit.github.io/apps/turbomax.ipa")!,
 		size: 17_051_987,
 		version: "1.0"
-	)
+	) }
 
-	static let all: [FeaturedApp] = [.ffds, .turbomax, .lara, .infern0, .cyanide]
+	static var all: [FeaturedApp] { [.ffds, .turbomax, .lara, .infern0, .cyanide] }
 }

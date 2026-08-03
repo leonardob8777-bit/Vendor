@@ -40,6 +40,18 @@ enum Language: String, CaseIterable, Identifiable {
 		case .spanish: return "🇪🇸"
 		}
 	}
+
+	/// What to hand a formatter that renders a date or a number.
+	///
+	/// The choice made in Vendor's own picker never touches the system, so
+	/// `Locale.current` — which is what every formatter reaches for by default —
+	/// keeps answering with the phone's language. A date left to it came out
+	/// "Aug 3, 2026" sitting directly under the heading "Publicado".
+	///
+	/// The language alone, with no region: an `es` reading paired with the
+	/// device's `US` region gives `es_US`, which borrows the American field
+	/// order and renders "ago 3, 2026" instead of "3 ago 2026".
+	var locale: Locale { Locale(identifier: rawValue) }
 }
 
 @Observable
@@ -241,6 +253,30 @@ enum Strings {
 		"apps.version":     (en: "Version",             es: "Versión"),
 		"apps.size":        (en: "Size",                es: "Tamaño"),
 		"apps.released":    (en: "Released",            es: "Publicado"),
+
+		// Featured apps. The blurbs Vendor writes itself, unlike the
+		// descriptions that arrive inside a repository feed — those are the
+		// uploader's words and there is nothing to translate them against.
+		"featured.lara.summary": (
+			en: "Toolkit for tweaking iOS system settings and behaviour.",
+			es: "Kit de herramientas para ajustar la configuración y el comportamiento de iOS."
+		),
+		"featured.cyanide.summary": (
+			en: "Tweak runner for iOS built on the DarkSword kernel exploit.",
+			es: "Ejecutor de tweaks para iOS basado en el exploit de kernel DarkSword."
+		),
+		"featured.infern0.summary": (
+			en: "Sibling build of Cyanide, on the same DarkSword base.",
+			es: "Versión hermana de Cyanide, sobre la misma base DarkSword."
+		),
+		"featured.ffds.summary": (
+			en: "Patched Free Fire client built on the DarkSword base.",
+			es: "Cliente de Free Fire parcheado sobre la base DarkSword."
+		),
+		"featured.turbomax.summary": (
+			en: "Performance tuner from the DarkSword games line.",
+			es: "Optimizador de rendimiento de la línea de juegos DarkSword."
+		),
 
 		// IPA
 		"ipa.all":          (en: "All",       es: "Todas"),
