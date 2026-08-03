@@ -102,7 +102,7 @@ struct CertificatesView: View {
 
 			expiryBlock(for: item)
 		}
-		.statusCard(padding: 11, glow: tint(for: item))
+		.statusCard(padding: 11, aura: CertificateAura(item))
 	}
 
 	@ViewBuilder

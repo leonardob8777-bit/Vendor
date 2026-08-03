@@ -38,6 +38,20 @@ struct StoredCertificate: Identifiable, Codable, Equatable {
 
 	var isUsable: Bool { statusCode == 0 }
 
+	/// Whether it could sign something right now.
+	///
+	/// `isUsable` only reports what the engine made of the file, which says
+	/// nothing about the date — so an expired certificate is "usable" and sorts
+	/// ahead of a healthy one when the sort is by soonest expiry, its date being
+	/// in the past. That put an expired identity on the Home card, under the word
+	/// Expired, while a certificate good for another ten months sat in the list
+	/// behind it.
+	var canSignNow: Bool {
+		guard isUsable else { return false }
+		guard let expiresAt else { return true }
+		return expiresAt > Date()
+	}
+
 	/// How many days this certificate was good for when it arrived.
 	///
 	/// Measured from the import rather than from an issue date, which a `.p12`

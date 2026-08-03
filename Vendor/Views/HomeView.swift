@@ -29,7 +29,7 @@ struct HomeView: View {
 	/// own rejection branch unreachable.
 	private var leadCertificate: StoredCertificate? {
 		store.certificates
-			.filter(\.isUsable)
+			.filter(\.canSignNow)
 			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
 			.first
 		?? store.certificates
@@ -116,6 +116,7 @@ struct HomeView: View {
 		let health = cert.health()
 		let days = daysLeft(health)
 		let tint = tint(for: health)
+		let aura = CertificateAura(health: health, lifetimeDays: cert.lifetimeDays)
 
 		return VStack(alignment: .leading, spacing: 14) {
 			HStack {
@@ -125,7 +126,7 @@ struct HomeView: View {
 			}
 
 			HStack(spacing: 16) {
-				CountdownRing(daysLeft: days, lifetimeDays: cert.lifetimeDays, tint: tint)
+				CountdownRing(daysLeft: days, aura: aura)
 					.frame(width: 76, height: 76)
 
 				VStack(alignment: .leading, spacing: 4) {
@@ -164,7 +165,7 @@ struct HomeView: View {
 				inlineWarning(reason)
 			}
 		}
-		.statusCard(glow: tint)
+		.statusCard(aura: aura)
 	}
 
 	/// Read-only too: importing lives in the Certificates tab, this panel only
@@ -416,30 +417,34 @@ struct HomeView: View {
 	}
 }
 
-/// Ring showing how much of a certificate's life is left.
+/// Lit ring around a certificate's remaining days.
+///
+/// The arc it used to draw is gone — see `CertificateAura` for why. What is
+/// left is the light, and the light is what carries the time.
 struct CountdownRing: View {
 	let daysLeft: Int
-	/// How long the certificate was good for to begin with.
-	var lifetimeDays: Int = 365
-	let tint: Color
-
-	/// Measured against the certificate's own span rather than a fixed year. A
-	/// free Apple ID certificate lasts seven days, and against a year it drew
-	/// itself two percent full on the day it was imported — which reads as
-	/// nearly expired when it is nothing of the sort.
-	private var fraction: Double {
-		min(max(Double(daysLeft) / Double(max(lifetimeDays, 1)), 0), 1)
-	}
+	let aura: CertificateAura
 
 	var body: some View {
 		ZStack {
+			// Seats the ring against the card, so the glow has something to sit
+			// on rather than floating in the middle of nothing.
 			Circle()
-				.stroke(Color.inkSecondary.opacity(0.18), lineWidth: 7)
+				.stroke(Color.inkSecondary.opacity(0.16), lineWidth: 7)
+
+			// The light itself, blurred wide enough to spill past the ring.
+			Circle()
+				.stroke(aura.sweep, lineWidth: 10)
+				.blur(radius: 9)
 
 			Circle()
-				.trim(from: 0, to: fraction)
-				.stroke(tint, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-				.rotationEffect(.degrees(-90))
+				.stroke(aura.sweep, lineWidth: 7)
+
+			// A thread of white on the inside edge. Without it the blur bleeds
+			// inward and the ring reads as fog rather than as a lit band.
+			Circle()
+				.stroke(Color.white.opacity(0.16), lineWidth: 1)
+				.padding(3.5)
 
 			VStack(spacing: -2) {
 				Text("\(daysLeft)")

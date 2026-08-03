@@ -124,6 +124,9 @@ private struct CardSurface: ViewModifier {
 	var radius: CGFloat = 18
 	/// Optional status colour washed into the top-right corner.
 	var glow: Color? = nil
+	/// A certificate's two-tone light. Takes over from `glow` when present and
+	/// lights the rim as well as the corner.
+	var aura: CertificateAura? = nil
 
 	private var shape: RoundedRectangle {
 		RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -154,7 +157,37 @@ private struct CardSurface: ViewModifier {
 					)
 
 					// 2b. Status bloom, when the card reports health.
-					if let glow {
+					if let aura {
+						// Two radials rather than one: a wide fall-off in the
+						// deep tone for the body of the light, and a tight lit
+						// core in the corner it appears to come from. A single
+						// gradient either reaches far and looks like a stain or
+						// stays bright and looks like a sticker.
+						shape.fill(
+							RadialGradient(
+								colors: [
+									aura.deep.opacity(0.44 * strength),
+									aura.deep.opacity(0.16 * strength),
+									.clear,
+								],
+								center: .topTrailing,
+								startRadius: 0,
+								endRadius: 250
+							)
+						)
+						shape.fill(
+							RadialGradient(
+								colors: [
+									aura.bright.opacity(0.62 * strength),
+									aura.bright.opacity(0.18 * strength),
+									.clear,
+								],
+								center: .topTrailing,
+								startRadius: 0,
+								endRadius: 105
+							)
+						)
+					} else if let glow {
 						shape.fill(
 							RadialGradient(
 								colors: [
@@ -172,22 +205,64 @@ private struct CardSurface: ViewModifier {
 					// 3. Rim light: bright along the top-left edge, brand-tinted
 					//    along the bottom-right, so the panel reads as a solid
 					//    pane catching light rather than a flat tint.
-					shape.strokeBorder(
-						LinearGradient(
-							colors: [
-								Color.white.opacity(scheme == .dark ? 0.22 : 0.85),
-								Color.white.opacity(scheme == .dark ? 0.04 : 0.25),
-								Color.mint.opacity(0.16 * strength),
-							],
-							startPoint: .topLeading,
-							endPoint: .bottomTrailing
-						),
-						lineWidth: 1
-					)
+					if let aura {
+						// Run the other way, so the lit end of the rim arrives at
+						// the same corner the bloom comes from. A rim brightest
+						// opposite the light source is the one thing that would
+						// give away that none of this is lit by anything.
+						shape.strokeBorder(
+							LinearGradient(
+								colors: [
+									Color.white.opacity(scheme == .dark ? 0.10 : 0.55),
+									aura.deep.opacity(0.65 * strength),
+									aura.bright.opacity(0.95 * strength),
+								],
+								startPoint: .bottomLeading,
+								endPoint: .topTrailing
+							),
+							lineWidth: 1.4
+						)
+					} else {
+						shape.strokeBorder(
+							LinearGradient(
+								colors: [
+									Color.white.opacity(scheme == .dark ? 0.22 : 0.85),
+									Color.white.opacity(scheme == .dark ? 0.04 : 0.25),
+									Color.mint.opacity(0.16 * strength),
+								],
+								startPoint: .topLeading,
+								endPoint: .bottomTrailing
+							),
+							lineWidth: 1
+						)
+					}
 				}
 			}
 			.clipShape(shape)
+			// 4. The rim bleeding outward. Drawn after the clip on purpose:
+			//    inside it, the blur would be cut off at the very edge it is
+			//    meant to spill past, and the card would keep a hard outline.
+			.overlay {
+				if let aura {
+					shape
+						.strokeBorder(
+							LinearGradient(
+								colors: [
+									.clear,
+									aura.deep.opacity(0.55 * strength),
+									aura.bright.opacity(0.90 * strength),
+								],
+								startPoint: .bottomLeading,
+								endPoint: .topTrailing
+							),
+							lineWidth: 2
+						)
+						.blur(radius: 5)
+						.allowsHitTesting(false)
+				}
+			}
 			.modifier(Lift())
+			.modifier(AuraCast(aura: aura, strength: strength))
 	}
 }
 
@@ -214,6 +289,24 @@ private struct Lift: ViewModifier {
 	}
 }
 
+/// Throws the aura's colour onto the canvas around the card.
+///
+/// Its own modifier rather than a `.shadow` with a clear colour when there is no
+/// aura: a clear shadow still costs an offscreen pass on every card in the app,
+/// and only one card in the app has an aura.
+private struct AuraCast: ViewModifier {
+	let aura: CertificateAura?
+	let strength: Double
+
+	func body(content: Content) -> some View {
+		if let aura {
+			content.shadow(color: aura.deep.opacity(0.42 * strength), radius: 18, y: 4)
+		} else {
+			content
+		}
+	}
+}
+
 extension View {
 	func card(padding: CGFloat = 16, radius: CGFloat = 18) -> some View {
 		modifier(CardSurface(padding: padding, radius: radius))
@@ -223,6 +316,12 @@ extension View {
 	/// corner — green when healthy, red when not.
 	func statusCard(padding: CGFloat = 16, radius: CGFloat = 18, glow: Color) -> some View {
 		modifier(CardSurface(padding: padding, radius: radius, glow: glow))
+	}
+
+	/// A certificate's card: lit corner, lit rim, and a cast onto the canvas,
+	/// all in the colour its remaining life has reached.
+	func statusCard(padding: CGFloat = 16, radius: CGFloat = 18, aura: CertificateAura) -> some View {
+		modifier(CardSurface(padding: padding, radius: radius, aura: aura))
 	}
 
 	/// Frosted circle, for the round toolbar buttons.
