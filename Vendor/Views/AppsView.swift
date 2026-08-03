@@ -97,9 +97,9 @@ final class AppsViewModel {
 	func matches(_ source: AppSource) -> [SourceApp] {
 		guard !query.isEmpty else { return source.apps }
 		return source.apps.filter {
-			$0.name.localizedCaseInsensitiveContains(query)
-			|| ($0.developerName?.localizedCaseInsensitiveContains(query) ?? false)
-			|| ($0.subtitle?.localizedCaseInsensitiveContains(query) ?? false)
+			$0.name.containsFolding(query)
+			|| ($0.developerName?.containsFolding(query) ?? false)
+			|| ($0.subtitle?.containsFolding(query) ?? false)
 		}
 	}
 }

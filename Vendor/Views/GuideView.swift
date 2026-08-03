@@ -12,7 +12,7 @@ struct GuideView: View {
 	private var filtered: [GuideEntry] {
 		guard !query.isEmpty else { return GuideContent.all }
 		return GuideContent.all.filter {
-			$0.searchText.localizedCaseInsensitiveContains(query)
+			$0.searchText.containsFolding(query)
 		}
 	}
 

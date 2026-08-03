@@ -99,7 +99,7 @@ struct SourceApp: Decodable, Identifiable {
 	}
 
 	var screenshotLinks: [URL] {
-		(screenshotURLs ?? []).compactMap(URL.init(string:))
+		(screenshotURLs ?? []).compactMap(Self.web)
 	}
 
 	/// Release date rendered for display, when the feed supplies a valid one.

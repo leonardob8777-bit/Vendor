@@ -82,6 +82,24 @@ final class Localizer {
 /// Shorthand used throughout the views.
 func t(_ key: String) -> String { Localizer.shared.string(key) }
 
+extension StringProtocol {
+	/// Substring search that ignores case *and* accents.
+	///
+	/// `localizedCaseInsensitiveContains` folds case only, so in the Spanish
+	/// half of the app typing "guia" found nothing while "Guía" sat on screen,
+	/// and the same for "instalacion", "automatica" and every other accented
+	/// word — which is most of the guide. Nobody reaches for the accent keys to
+	/// search.
+	func containsFolding(_ other: String) -> Bool {
+		range(
+			of: other,
+			options: [.caseInsensitive, .diacriticInsensitive],
+			range: nil,
+			locale: .current
+		) != nil
+	}
+}
+
 // MARK: - Table
 
 enum Strings {
