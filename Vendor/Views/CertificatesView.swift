@@ -31,15 +31,19 @@ struct CertificatesView: View {
 				ForEach(groups, id: \.title) { group in
 					VStack(alignment: .leading, spacing: 8) {
 						SectionLabel(text: group.title)
+							.scrollEdgeSoftening()
 						VStack(spacing: 8) {
 							ForEach(group.items) { item in
 								SwipeToDelete { store.delete(item) } content: {
 									row(for: item)
 								}
+								// Per row, not per group: a group of enough
+								// certificates is taller than the screen, and a
+								// block that never fits never comes into focus.
+								.scrollEdgeSoftening()
 							}
 						}
 					}
-					.scrollEdgeSoftening()
 				}
 			}
 		}

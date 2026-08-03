@@ -162,11 +162,18 @@ extension View {
 	/// Still a detail rather than an effect, but with enough weight to be seen
 	/// in motion: four points of blur and a third of the opacity. Past this the
 	/// edges stop reading as depth and start reading as a rendering fault.
-	func scrollEdgeSoftening() -> some View {
+	///
+	/// Pass `false` for a row that can grow taller than the scroll view. The
+	/// identity phase means "this row is fully clear of both edges", which a row
+	/// taller than the viewport never is — so it does not soften on its way past,
+	/// it sits blurred permanently. That is what happened to the signing card the
+	/// moment it was opened: every field in it, hazy and dimmed, for as long as
+	/// it was the thing being read.
+	func scrollEdgeSoftening(_ active: Bool = true) -> some View {
 		scrollTransition(.interactive, axis: .vertical) { view, phase in
 			view
-				.blur(radius: phase.isIdentity ? 0 : 4)
-				.opacity(phase.isIdentity ? 1 : 0.65)
+				.blur(radius: active && !phase.isIdentity ? 4 : 0)
+				.opacity(active && !phase.isIdentity ? 0.65 : 1)
 		}
 	}
 }

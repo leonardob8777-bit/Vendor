@@ -91,7 +91,9 @@ struct IPAView: View {
 					} content: {
 						packageCard(item)
 					}
-					.scrollEdgeSoftening()
+					// Not while it is open: an expanded card is taller than the
+					// screen, so it would never come back into focus.
+					.scrollEdgeSoftening(expanded != item.id)
 				}
 			}
 
