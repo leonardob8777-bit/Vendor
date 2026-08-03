@@ -206,22 +206,7 @@ private struct CardSurface: ViewModifier {
 					//    along the bottom-right, so the panel reads as a solid
 					//    pane catching light rather than a flat tint.
 					if let aura {
-						// Run the other way, so the lit end of the rim arrives at
-						// the same corner the bloom comes from. A rim brightest
-						// opposite the light source is the one thing that would
-						// give away that none of this is lit by anything.
-						shape.strokeBorder(
-							LinearGradient(
-								colors: [
-									Color.white.opacity(scheme == .dark ? 0.10 : 0.55),
-									aura.deep.opacity(0.65 * strength),
-									aura.bright.opacity(0.95 * strength),
-								],
-								startPoint: .bottomLeading,
-								endPoint: .topTrailing
-							),
-							lineWidth: 1.4
-						)
+						RimShine(aura: aura, shape: shape, strength: strength, lineWidth: 1.4)
 					} else {
 						shape.strokeBorder(
 							LinearGradient(
@@ -244,19 +229,7 @@ private struct CardSurface: ViewModifier {
 			//    meant to spill past, and the card would keep a hard outline.
 			.overlay {
 				if let aura {
-					shape
-						.strokeBorder(
-							LinearGradient(
-								colors: [
-									.clear,
-									aura.deep.opacity(0.55 * strength),
-									aura.bright.opacity(0.90 * strength),
-								],
-								startPoint: .bottomLeading,
-								endPoint: .topTrailing
-							),
-							lineWidth: 2
-						)
+					RimShine(aura: aura, shape: shape, strength: strength, lineWidth: 2)
 						.blur(radius: 5)
 						.allowsHitTesting(false)
 				}
@@ -286,6 +259,75 @@ private struct Lift: ViewModifier {
 				.shadow(color: .black.opacity(0.09), radius: 16, x: 0, y: 6)
 				.shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 1)
 		}
+	}
+}
+
+/// The rim of a certificate card, with a glint travelling round it.
+///
+/// The colour says how much life is left; the movement is what makes it read as
+/// a lit object rather than a coloured outline. One highlight, going round once
+/// every eight seconds — slow enough to catch out of the corner of the eye and
+/// never fast enough to ask to be watched.
+///
+/// The gradient is rotated as a view and then masked to the rim, rather than an
+/// `AngularGradient` given an animated angle. A gradient is a `ShapeStyle`, and
+/// SwiftUI does not interpolate between two of them — the angle would jump on
+/// each change instead of sweeping. `rotationEffect` is a geometry effect and
+/// animates properly. It also leaves the layout frame alone, so the mask stays
+/// put over the card's edge while the light turns underneath it.
+private struct RimShine: View {
+	@Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+	let aura: CertificateAura
+	let shape: RoundedRectangle
+	let strength: Double
+	let lineWidth: CGFloat
+
+	@State private var phase: Double = 0
+
+	private var sweep: AngularGradient {
+		AngularGradient(
+			// Flat either side of the seam, and the glint parked in the middle,
+			// as far from it as it can get.
+			//
+			// An angular gradient joins its last stop straight onto its first,
+			// and matching the two colours is not enough: a gradient that falls
+			// to its darkest exactly at the join has a V there, so the rim dims
+			// to a notch at one point and brightens away from it on both sides.
+			// Travelling round, that notch reads as the outline coming unstuck
+			// and sticking back down. Holding one value across the whole join
+			// leaves nothing to see.
+			stops: [
+				.init(color: aura.deep.opacity(0.85 * strength),   location: 0.00),
+				.init(color: aura.deep.opacity(0.85 * strength),   location: 0.28),
+				.init(color: aura.bright.opacity(1.00 * strength), location: 0.42),
+				// The glint. White rather than more of the bright tone: a
+				// specular highlight is the colour of the light, not of the
+				// thing it lands on, and it is what sells the whole effect.
+				.init(color: Color.white.opacity(0.95 * strength), location: 0.50),
+				.init(color: aura.bright.opacity(1.00 * strength), location: 0.58),
+				.init(color: aura.deep.opacity(0.85 * strength),   location: 0.72),
+				.init(color: aura.deep.opacity(0.85 * strength),   location: 1.00),
+			],
+			center: .center
+		)
+	}
+
+	var body: some View {
+		sweep
+			.rotationEffect(.degrees(phase))
+			// A rotated rectangle no longer covers the one it started as, so its
+			// corners would fall outside the gradient and the rim would go
+			// transparent there. Angles are unchanged by a uniform scale, so
+			// oversizing costs nothing but guarantees cover at every rotation.
+			.scaleEffect(2.6)
+			.mask(shape.strokeBorder(lineWidth: lineWidth))
+			.onAppear {
+				guard !reduceMotion else { return }
+				withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+					phase = 360
+				}
+			}
 	}
 }
 
