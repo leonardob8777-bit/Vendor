@@ -131,7 +131,7 @@ extension DownloadSession: URLSessionDownloadDelegate {
 				.appendingPathComponent("vendor-downloads/\(UUID().uuidString)", isDirectory: true)
 			do {
 				try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-				let destination = folder.appendingPathComponent(fileName)
+				let destination = folder.appendingPathComponent(Self.safeName(fileName))
 				try FileManager.default.moveItem(at: location, to: destination)
 				landed = destination
 			} catch {
@@ -143,6 +143,24 @@ extension DownloadSession: URLSessionDownloadDelegate {
 		pending[identifier]?.landed = landed
 		pending[identifier]?.failure = failure
 		lock.unlock()
+	}
+
+	/// Reduces a suggested name to something that can only land in `folder`.
+	///
+	/// The name is chosen by whoever runs the repository, by way of the download
+	/// URL's last path component — and that is not the single component it looks
+	/// like. Foundation decodes percent-escapes when it splits a URL path, so
+	/// `.../%2e%2e%2F%2e%2e%2Fevil.ipa` comes back as the string
+	/// "../../evil.ipa": still ends in .ipa, still passes for a file name, and
+	/// joined onto the staging folder it resolves two levels up and out.
+	///
+	/// Checked here rather than only where the name is built, because this is
+	/// the code that decides where the bytes go.
+	static func safeName(_ proposed: String) -> String {
+		let last = (proposed as NSString).lastPathComponent
+		let cleaned = last.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !cleaned.isEmpty, cleaned != ".", cleaned != ".." else { return "package.ipa" }
+		return cleaned
 	}
 
 	func urlSession(

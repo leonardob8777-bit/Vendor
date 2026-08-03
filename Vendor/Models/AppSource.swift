@@ -86,7 +86,12 @@ struct SourceApp: Decodable, Identifiable {
 	/// File name to store the package under. Feeds often point at redirects
 	/// with no usable name, so fall back to the app itself.
 	var suggestedFileName: String {
-		if let last = downloadLink?.lastPathComponent, last.lowercased().hasSuffix(".ipa") {
+		// `lastPathComponent` is not necessarily one component: Foundation
+		// decodes percent-escapes when it splits the path, so an encoded slash
+		// comes back as a real one. See `DownloadSession.safeName`.
+		if let last = downloadLink?.lastPathComponent.split(separator: "/").last.map(String.init),
+		   last.lowercased().hasSuffix(".ipa"),
+		   last != ".." {
 			return last
 		}
 		let safe = name.replacingOccurrences(of: "/", with: "-")
