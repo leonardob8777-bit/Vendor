@@ -156,13 +156,6 @@ enum BundlePreparer {
 		// there and die on launch. Doing nothing at least leaves it working.
 		guard let executable = executableURL(of: bundle), isMachO(executable) else { return }
 
-		let fm = FileManager.default
-		let frameworks = bundle.appendingPathComponent("Frameworks", isDirectory: true)
-
-		for name in names {
-			try? fm.removeItem(at: frameworks.appendingPathComponent(name))
-		}
-
 		// Matching on the last path component rather than the whole string: a
 		// load command may be written @rpath, @executable_path or absolute, and
 		// the list the user ticked holds file names.
@@ -174,8 +167,27 @@ enum BundlePreparer {
 				|| (command as NSString).lastPathComponent == (name as NSString).deletingPathExtension
 			}
 		}
-		guard !doomed.isEmpty else { return }
-		SigningEngine.remove(dylibs: doomed, fromExecutableAt: executable.path)
+
+		// The executable first, and the files only if it worked.
+		//
+		// The other order is what the comment above warns against, and it was
+		// the order this ran in: delete, then strip, then ignore whether the
+		// strip succeeded — `remove` returns a Bool that was being discarded. A
+		// failure there left the app pointing at libraries no longer in the
+		// bundle, which is a crash on launch. This way the worst case is some
+		// dead weight still in Frameworks, which nothing loads and which costs
+		// only size.
+		if !doomed.isEmpty {
+			guard SigningEngine.remove(dylibs: doomed, fromExecutableAt: executable.path) else {
+				return
+			}
+		}
+
+		let fm = FileManager.default
+		let frameworks = bundle.appendingPathComponent("Frameworks", isDirectory: true)
+		for name in names {
+			try? fm.removeItem(at: frameworks.appendingPathComponent(name))
+		}
 	}
 
 	/// Whether the file is plausibly a Mach-O the engine can parse.

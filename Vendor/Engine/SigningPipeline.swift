@@ -17,11 +17,14 @@ enum SigningPipelineError: LocalizedError {
 	case noExecutable
 	case certificateMissing
 	case emptyTweak(String)
+	case injectionFailed(String)
 
 	var errorDescription: String? {
 		switch self {
 		case .emptyTweak(let name):
 			return String(format: t("deb.noTweakInside"), name)
+		case .injectionFailed(let name):
+			return String(format: t("err.pipeline.injectFailed"), name)
 		case .noPayload:
 			return t("err.pipeline.noPayload")
 		case .noExecutable:
@@ -210,10 +213,17 @@ enum SigningPipeline {
 
 			rewriteJailbreakPaths(in: destination)
 
-			SigningEngine.inject(
+			// The result was being discarded. A tweak that fails to inject is
+			// still copied into Frameworks, so the app signs, installs and runs
+			// — with the tweak sitting there doing nothing and nothing anywhere
+			// saying why. Adding a tweak is the whole reason this step exists;
+			// if it did not happen, that is worth stopping for.
+			guard SigningEngine.inject(
 				dylibPath: "@executable_path/Frameworks/\(dylib.lastPathComponent)",
 				intoExecutableAt: executable.path
-			)
+			) else {
+				throw SigningPipelineError.injectionFailed(dylib.lastPathComponent)
+			}
 		}
 	}
 

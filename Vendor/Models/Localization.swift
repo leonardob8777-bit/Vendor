@@ -465,6 +465,10 @@ enum Strings {
 			en: "The app bundle does not name an executable.",
 			es: "El paquete de la app no indica ningún ejecutable."
 		),
+		"err.pipeline.injectFailed": (
+			en: "%@ could not be attached to the app. Nothing was signed.",
+			es: "No se pudo enlazar %@ con la app. No se firmó nada."
+		),
 		"err.pipeline.certMissing": (
 			en: "The certificate files are missing. Import the certificate again.",
 			es: "Faltan los archivos del certificado. Vuelve a importarlo."
