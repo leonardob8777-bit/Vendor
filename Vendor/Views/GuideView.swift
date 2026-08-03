@@ -18,7 +18,7 @@ struct GuideView: View {
 
 	var body: some View {
 		Screen(t("tab.guide"), contentBlur: opened == nil ? 0 : 16) {
-			searchField
+			searchField.scrollEdgeSoftening()
 			if filtered.isEmpty {
 				emptyState
 			} else {
@@ -28,6 +28,7 @@ struct GuideView: View {
 							row(for: guide)
 						}
 						.buttonStyle(.plain)
+						.scrollEdgeSoftening()
 					}
 				}
 			}

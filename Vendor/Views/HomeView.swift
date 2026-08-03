@@ -47,12 +47,12 @@ struct HomeView: View {
 			// and the join read as a black line ruled across the top.
 			contentBlur: pickingLanguage ? 16 : 0
 		) {
-			banner
-			certificateStatus
-			quickActions
-			privacyNote
-			community
-			disclaimer
+			banner.scrollEdgeSoftening()
+			certificateStatus.scrollEdgeSoftening()
+			quickActions.scrollEdgeSoftening()
+			privacyNote.scrollEdgeSoftening()
+			community.scrollEdgeSoftening()
+			disclaimer.scrollEdgeSoftening()
 		}
 		.overlay {
 			if pickingLanguage {

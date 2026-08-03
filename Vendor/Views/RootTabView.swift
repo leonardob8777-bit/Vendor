@@ -133,6 +133,9 @@ struct Screen<Content: View>: View {
 					toolbar
 				}
 				.padding(.bottom, 2)
+				// The title softens with everything else once it starts leaving,
+				// but stays sharp while the list is at rest at the top.
+				.scrollEdgeSoftening()
 
 				content()
 			}
@@ -144,6 +147,27 @@ struct Screen<Content: View>: View {
 		}
 		.blur(radius: contentBlur)
 		.auroraBackground()
+	}
+}
+
+extension View {
+
+	/// Softens a row as it approaches the top or bottom of its scroll view.
+	///
+	/// Applied per row rather than as a haze laid over the edges of the screen:
+	/// an overlay would blur whatever sat under it even when the list has not
+	/// moved, which means the title arrives already out of focus. Keyed to each
+	/// row's own position, nothing is touched until it starts to leave.
+	///
+	/// Kept deliberately slight. Two points of blur and a quarter of the opacity
+	/// is enough to read as depth; more and it looks like the screen is broken
+	/// rather than like the middle is where you are meant to be looking.
+	func scrollEdgeSoftening() -> some View {
+		scrollTransition(.interactive, axis: .vertical) { view, phase in
+			view
+				.blur(radius: phase.isIdentity ? 0 : 2)
+				.opacity(phase.isIdentity ? 1 : 0.75)
+		}
 	}
 }
 

@@ -39,6 +39,7 @@ struct CertificatesView: View {
 							}
 						}
 					}
+					.scrollEdgeSoftening()
 				}
 			}
 		}

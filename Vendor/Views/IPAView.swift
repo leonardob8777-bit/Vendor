@@ -63,7 +63,7 @@ struct IPAView: View {
 			toolbar: AnyView(addButton),
 			contentBlur: running == nil && !showingTrustSetup ? 0 : 16
 		) {
-			shelfPicker
+			shelfPicker.scrollEdgeSoftening()
 
 			if busy {
 				HStack(spacing: 10) {
@@ -91,6 +91,7 @@ struct IPAView: View {
 					} content: {
 						packageCard(item)
 					}
+					.scrollEdgeSoftening()
 				}
 			}
 

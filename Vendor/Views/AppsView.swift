@@ -119,13 +119,14 @@ struct AppsView: View {
 			// layer and the join reads as a black line across the top.
 			contentBlur: inspecting == nil && !managingSources ? 0 : 16
 		) {
-			searchField
+			searchField.scrollEdgeSoftening()
 
 			// Pinned above the remote source so it stays first whatever the
 			// feed returns.
 			ForEach(FeaturedApp.all) { featured in
 				FeaturedAppRow(app: featured) { inspecting = AppDetail(featured) }
 				.padding(.top, 4)
+				.scrollEdgeSoftening()
 			}
 
 			switch model.state {
@@ -158,6 +159,7 @@ struct AppsView: View {
 									row(for: app)
 								}
 								.buttonStyle(.plain)
+								.scrollEdgeSoftening()
 							}
 						}
 					}
