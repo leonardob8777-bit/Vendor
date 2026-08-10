@@ -11,7 +11,7 @@
 //
 
 import Foundation
-import Observation
+import Combine
 
 enum Language: String, CaseIterable, Identifiable {
 	case english = "en"
@@ -54,13 +54,12 @@ enum Language: String, CaseIterable, Identifiable {
 	var locale: Locale { Locale(identifier: rawValue) }
 }
 
-@Observable
-final class Localizer {
+final class Localizer: ObservableObject {
 	static let shared = Localizer()
 
 	private static let key = "vendor.language"
 
-	var language: Language {
+	@Published var language: Language {
 		didSet {
 			guard language != oldValue else { return }
 			UserDefaults.standard.set(language.rawValue, forKey: Self.key)
@@ -382,10 +381,8 @@ enum Strings {
 		),
 		"task.openApp":     (en: "Open app",  es: "Abrir app"),
 
-		"ipa.stillWorking": (
-			en: "Still finishing the previous run. The signing engine cannot be interrupted — give it a moment.",
-			es: "Todavía está terminando el intento anterior. El motor de firma no se puede interrumpir; dale un momento."
-		),
+		"ipa.queued": (en: "Queued", es: "En cola"),
+		"ipa.queuedCount": (en: "%d queued", es: "%d en cola"),
 		"ipa.pickCertFirst": (
 			en: "Choose a certificate for %@ first.",
 			es: "Elige antes un certificado para %@."

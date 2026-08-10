@@ -17,8 +17,23 @@ extension UTType {
 }
 
 struct IPAView: View {
-	@State private var store = IPAStore.shared
-	@State private var certificates = CertificateStore.shared
+	@ObservedObject private var store = IPAStore.shared
+	@ObservedObject private var certificates = CertificateStore.shared
+
+	/// What a package is waiting in line for — signing needs the whole
+	/// pipeline, installing an already-signed build just needs `handOff`. The
+	/// pill already knows which one applies at the moment it is tapped; the
+	/// queue only has to remember which was asked for.
+	private enum QueuedAction {
+		case sign(ImportedIPA)
+		case install(ImportedIPA)
+
+		var item: ImportedIPA {
+			switch self {
+			case .sign(let item), .install(let item): return item
+			}
+		}
+	}
 
 	private enum Shelf: String, CaseIterable {
 		case all
@@ -47,10 +62,21 @@ struct IPAView: View {
 	@State private var running: AppTask?
 	/// The job the panel is showing, kept so it can be called off.
 	@State private var job: Task<Void, Never>?
+	/// Packages waiting their turn behind `job`. `sign` and `installSigned`
+	/// append here instead of failing outright when the engine is already
+	/// busy with something else.
+	@State private var queue: [QueuedAction] = []
+	/// The package `job` is currently working through, kept so its card can be
+	/// told apart from ones only queued behind it.
+	@State private var runningItemID: UUID?
 	@State private var failure: String?
 	@State private var busy = false
-	@State private var installer = Installer.shared
-	@State private var router = Router.shared
+	@ObservedObject private var installer = Installer.shared
+	@ObservedObject private var router = Router.shared
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 	@State private var showingTrustSetup = false
 	/// Archive produced by the last successful run, offered for install.
 	@State private var signedFile: URL?
@@ -95,6 +121,20 @@ struct IPAView: View {
 				CalloutRow(text: failure).scrollEdgeSoftening()
 			}
 
+			if !queue.isEmpty {
+				HStack(spacing: 10) {
+					Image(systemName: "clock")
+						.foregroundStyle(Color.inkSecondary)
+					Text(String(format: t("ipa.queuedCount"), queue.count))
+						.font(.system(size: 13))
+						.foregroundStyle(Color.inkSecondary)
+					Spacer(minLength: 0)
+				}
+				.padding(14)
+				.card(padding: 0)
+				.scrollEdgeSoftening()
+			}
+
 			if visible.isEmpty {
 				emptyState
 			} else {
@@ -105,7 +145,7 @@ struct IPAView: View {
 					// not one to delete by accident, and the drag would
 					// otherwise swallow every scroll through its options.
 					SwipeToDelete(isEnabled: expanded != item.id) {
-						store.delete(item)
+						deletePackage(item)
 					} content: {
 						packageCard(item)
 					}
@@ -126,7 +166,7 @@ struct IPAView: View {
 						? nil
 						: (title: t("task.openApp"), run: openInstalled),
 					cancel: cancelRunningJob
-				) { running = nil }
+				) { running = nil; advanceQueue() }
 					.transition(.opacity)
 			}
 		}
@@ -151,7 +191,7 @@ struct IPAView: View {
 			presenting: confirmingDelete
 		) { item in
 			Button(t("common.delete"), role: .destructive) {
-				store.delete(item)
+				deletePackage(item)
 				if expanded == item.id { expanded = nil }
 			}
 		} message: { _ in
@@ -160,8 +200,8 @@ struct IPAView: View {
 		// The tab bar is the TabView's, so it draws above whatever a tab lays
 		// over its own content. Hiding it is what stops sharp chrome sitting on
 		// top of a panel that is meant to be floating free of the screen.
-		.toolbar(running == nil && !showingTrustSetup ? .visible : .hidden, for: .tabBar)
-		.onChange(of: router.revealPackage) { _, _ in revealRequestedPackage() }
+		.tabBarVisibility(running == nil && !showingTrustSetup)
+		.onChange(of: router.revealPackage) { _ in revealRequestedPackage() }
 		.onAppear {
 			store.reload()
 			certificates.reload()
@@ -320,13 +360,17 @@ struct IPAView: View {
 		// detached task, and a detached task does not inherit cancellation. So
 		// Cancel closes the panel while zsign carries on to the end. Starting a
 		// second run in that window would put two pipelines on the same
-		// `signed.ipa`, both writing it as they finish.
+		// `signed.ipa`, both writing it as they finish. This package waits its
+		// turn instead — `advanceQueue()` calls back in here once the current
+		// job's panel is dismissed.
 		guard job == nil else {
-			failure = t("ipa.stillWorking")
+			guard runningItemID != item.id, !queue.contains(where: { $0.item.id == item.id }) else { return }
+			queue.append(.sign(item))
 			return
 		}
 
 		failure = nil
+		runningItemID = item.id
 		let task = AppTask(
 			appName: item.name,
 			iconURL: artwork(for: item),
@@ -339,7 +383,17 @@ struct IPAView: View {
 		job = Task {
 			// Cleared here rather than by Cancel: the handle is what says whether
 			// the engine is still busy, and Cancel does not stop it.
-			defer { job = nil }
+			//
+			// If the panel has already been dismissed by the time this job ends
+			// — the ordinary case — the next queued package can start right away.
+			// If it has not, `advanceQueue` is left to the dismiss button instead,
+			// so a job that lands while its result is still on screen does not
+			// yank the panel away before it has been read.
+			defer {
+				job = nil
+				runningItemID = nil
+				if running == nil { advanceQueue() }
+			}
 			let destination = store.signedURL(for: item)
 			let signed: ImportedIPA
 
@@ -395,7 +449,23 @@ struct IPAView: View {
 
 	/// Installs an already-signed package, reusing the same bar.
 	private func installSigned(item: ImportedIPA) {
+		// Same rule as `sign`: the engine — and the one panel and `job` handle
+		// standing for whatever it is doing — only ever holds one package at a
+		// time. Without this, tapping Install on a different, already-signed
+		// package while something else was mid-run stole the panel out from
+		// under it: `running` and `job` got overwritten, `lastSigned` pointed at
+		// whichever package fired second, and the interrupted run's own defer
+		// went on to clear a `job` handle that this call had already replaced —
+		// so `advanceQueue` could fire early, or twice, or start the queue on a
+		// handle that no longer meant what it did when it was set.
+		guard job == nil else {
+			guard runningItemID != item.id, !queue.contains(where: { $0.item.id == item.id }) else { return }
+			queue.append(.install(item))
+			return
+		}
+
 		failure = nil
+		runningItemID = item.id
 		let task = AppTask(
 			appName: item.name,
 			iconURL: artwork(for: item),
@@ -406,12 +476,16 @@ struct IPAView: View {
 		signedFile = store.signedURL(for: item)
 
 		job = Task {
-			// Released the same way the signing run releases it. Without this the
-			// handle stayed set for the rest of the session once anything had been
-			// installed, and `sign` — which refuses to start while a handle is
-			// held — answered every later tap with "still finishing the previous
-			// run" for a job that ended minutes ago.
-			defer { job = nil }
+			// Released the same way the signing run releases it, and the same
+			// reasoning applies to starting the next queued action from here: only
+			// when the panel has already been dismissed, so a job that lands while
+			// its result is still on screen does not yank the panel away before it
+			// has been read.
+			defer {
+				job = nil
+				runningItemID = nil
+				if running == nil { advanceQueue() }
+			}
 			do {
 				try await handOff(item, task: task)
 			} catch {
@@ -449,6 +523,25 @@ struct IPAView: View {
 		job?.cancel()
 		installer.abort()
 		running = nil
+	}
+
+	/// Starts the next queued action, once the previous one has actually freed
+	/// the engine. Called from the panel's dismiss button, and from the job
+	/// itself when it finishes with no panel left open to hand off to.
+	private func advanceQueue() {
+		guard !queue.isEmpty else { return }
+		switch queue.removeFirst() {
+		case .sign(let item):    sign(item)
+		case .install(let item): installSigned(item: item)
+		}
+	}
+
+	/// Removes a package and, if it was only waiting its turn, takes it out of
+	/// the queue too — otherwise a deleted package stayed in line and its
+	/// queued action would have run over a file that no longer exists.
+	private func deletePackage(_ item: ImportedIPA) {
+		queue.removeAll { $0.item.id == item.id }
+		store.delete(item)
 	}
 
 	/// Hands the package to iOS and holds the bar until the system has taken
@@ -586,44 +679,64 @@ struct IPAView: View {
 		item.isSigned && FileManager.default.fileExists(atPath: store.signedURL(for: item).path)
 	}
 
+	private func isQueued(_ item: ImportedIPA) -> Bool {
+		queue.contains { $0.item.id == item.id }
+	}
+
+	private func isActive(_ item: ImportedIPA) -> Bool {
+		runningItemID == item.id
+	}
+
 	/// The one control that carries the row: Sign until the package is signed,
-	/// Install from then on.
+	/// Install from then on — or, while something else is on the engine,
+	/// Queued, which a second tap withdraws.
 	private func actionPill(_ item: ImportedIPA, ready: Bool) -> some View {
 		// Signing without a usable certificate cannot succeed, so the button says
 		// so by going flat rather than by letting the job start and fail.
 		let blocked = !ready && !check(item).canSign
+		let queued = isQueued(item)
+		let active = isActive(item)
 
 		return Button {
 			Haptics.tap()
-			ready ? installSigned(item: item) : sign(item)
+			if queued {
+				queue.removeAll { $0.item.id == item.id }
+			} else {
+				ready ? installSigned(item: item) : sign(item)
+			}
 		} label: {
 			HStack(spacing: 5) {
-				if ready {
+				if queued {
+					Image(systemName: "clock.fill")
+						.font(.system(size: 12, weight: .semibold))
+				} else if ready {
 					Image(systemName: "arrow.down.circle.fill")
 						.font(.system(size: 12, weight: .semibold))
 				}
-				Text(ready ? t("ipa.install") : t("ipa.sign"))
+				Text(queued ? t("ipa.queued") : (ready ? t("ipa.install") : t("ipa.sign")))
 					.font(.system(size: 13, weight: .bold))
 			}
 			.foregroundStyle(.white)
-			.padding(.horizontal, ready ? 13 : 18)
+			.padding(.horizontal, ready || queued ? 13 : 18)
 			.frame(height: 34)
 			.background {
-				if ready {
+				if queued {
+					Capsule().fill(Color.inkSecondary.opacity(0.55))
+				} else if ready {
 					InstallBackground()
 				} else {
 					Capsule().fill(LinearGradient.actionFlow)
 				}
 			}
 			.shadow(
-				color: (ready ? Color.installGlow : Color.brand).opacity(blocked ? 0 : 0.46),
+				color: (ready ? Color.installGlow : Color.brand).opacity(blocked || queued ? 0 : 0.46),
 				radius: 8, y: 3
 			)
 			.saturation(blocked ? 0 : 1)
-			.opacity(blocked ? 0.45 : 1)
+			.opacity(blocked ? 0.45 : (active ? 0.6 : 1))
 		}
 		.buttonStyle(.plain)
-		.disabled(blocked)
+		.disabled(blocked || active)
 	}
 
 	/// Artwork pulled out of the package at import time, with the generic
@@ -860,37 +973,45 @@ struct IPAView: View {
 		// tap read as doing nothing at all. Flat and unpressable says it where
 		// the hand already is, with the reason in the preflight row just above.
 		let blocked = !ready && !check(item).canSign
+		let queued = isQueued(item)
+		let active = isActive(item)
 
 		return VStack(spacing: 10) {
 			HStack(spacing: 10) {
 				Button {
 					Haptics.tap()
-					ready ? installSigned(item: item) : sign(item)
+					if queued {
+						queue.removeAll { $0.item.id == item.id }
+					} else {
+						ready ? installSigned(item: item) : sign(item)
+					}
 				} label: {
 					HStack(spacing: 7) {
-						Image(systemName: ready ? "arrow.down.app" : "signature")
+						Image(systemName: queued ? "clock.fill" : (ready ? "arrow.down.app" : "signature"))
 							.font(.system(size: 14, weight: .semibold))
-						Text(ready ? t("ipa.install") : t("ipa.sign"))
+						Text(queued ? t("ipa.queued") : (ready ? t("ipa.install") : t("ipa.sign")))
 							.font(.system(size: 15, weight: .bold))
 					}
 					.foregroundStyle(.white)
 					.frame(maxWidth: .infinity)
 					.padding(.vertical, 13)
 					.background {
-						if ready {
+						if queued {
+							Capsule().fill(Color.inkSecondary.opacity(0.55))
+						} else if ready {
 							InstallBackground()
 						} else {
 							Capsule().fill(LinearGradient.actionFlow)
 						}
 					}
 					.shadow(
-						color: (ready ? Color.installGlow : Color.brand).opacity(blocked ? 0 : 0.48),
+						color: (ready ? Color.installGlow : Color.brand).opacity(blocked || queued ? 0 : 0.48),
 						radius: 11, y: 4
 					)
 					.saturation(blocked ? 0 : 1)
-					.opacity(blocked ? 0.45 : 1)
+					.opacity(blocked ? 0.45 : (active ? 0.6 : 1))
 				}
-				.disabled(blocked)
+				.disabled(blocked || active)
 
 				Button {
 					Haptics.tap()
