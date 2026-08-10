@@ -14,7 +14,11 @@ struct SourcesSheet: View {
 	/// Called on close. The caller reloads then, rather than after each edit.
 	var dismiss: () -> Void
 
-	@State private var store = SourceStore.shared
+	@ObservedObject private var store = SourceStore.shared
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 	@State private var address = ""
 	@State private var checking = false
 	@State private var failure: String?
@@ -48,7 +52,7 @@ struct SourcesSheet: View {
 				.padding(.top, 22)
 				.padding(.bottom, 26)
 			}
-			.scrollBounceBehavior(.basedOnSize)
+			.scrollBounceBehaviorCompat()
 			.mask(
 				LinearGradient(
 					stops: [

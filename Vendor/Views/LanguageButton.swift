@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct LanguageButton: View {
-	@State private var localizer = Localizer.shared
+	@ObservedObject private var localizer = Localizer.shared
 	@Binding var isPresented: Bool
 
 	var body: some View {
@@ -25,7 +25,7 @@ struct LanguageButton: View {
 
 /// Floating panel, matching the other overlays rather than a system sheet.
 struct LanguagePicker: View {
-	@State private var localizer = Localizer.shared
+	@ObservedObject private var localizer = Localizer.shared
 	var onClose: () -> Void
 
 	var body: some View {

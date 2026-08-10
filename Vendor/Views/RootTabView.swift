@@ -32,7 +32,11 @@ struct RootTabView: View {
 		}
 	}
 
-	@State private var router = Router.shared
+	@ObservedObject private var router = Router.shared
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	init() {
 		// The tab bar sizes itself from its item metrics, so a larger label
@@ -169,11 +173,38 @@ extension View {
 	/// it sits blurred permanently. That is what happened to the signing card the
 	/// moment it was opened: every field in it, hazy and dimmed, for as long as
 	/// it was the thing being read.
+	@ViewBuilder
 	func scrollEdgeSoftening(_ active: Bool = true) -> some View {
-		scrollTransition(.interactive, axis: .vertical) { view, phase in
-			view
-				.blur(radius: active && !phase.isIdentity ? 4 : 0)
-				.opacity(active && !phase.isIdentity ? 0.65 : 1)
+		if #available(iOS 17, *) {
+			scrollTransition(.interactive, axis: .vertical) { view, phase in
+				view
+					.blur(radius: active && !phase.isIdentity ? 4 : 0)
+					.opacity(active && !phase.isIdentity ? 0.65 : 1)
+			}
+		} else {
+			self
+		}
+	}
+
+	/// `.scrollBounceBehavior(.basedOnSize)` is iOS 16.4+; below that a sheet
+	/// short enough to fit the screen just rubber-bands like any other.
+	@ViewBuilder
+	func scrollBounceBehaviorCompat() -> some View {
+		if #available(iOS 16.4, *) {
+			scrollBounceBehavior(.basedOnSize)
+		} else {
+			self
+		}
+	}
+
+	/// `.toolbar(_:for:)` is iOS 16+; below that the tab bar just stays put
+	/// under whatever panel is floating over it.
+	@ViewBuilder
+	func tabBarVisibility(_ visible: Bool) -> some View {
+		if #available(iOS 16, *) {
+			toolbar(visible ? .visible : .hidden, for: .tabBar)
+		} else {
+			self
 		}
 	}
 }

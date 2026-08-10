@@ -7,17 +7,16 @@
 //
 
 import Foundation
-import Observation
+import Combine
 
-@Observable
 @MainActor
-final class Downloader {
+final class Downloader: ObservableObject {
 	static let shared = Downloader()
 
 	/// Fraction complete, keyed by the caller's own identifier.
-	private(set) var progress: [String: Double] = [:]
+	@Published private(set) var progress: [String: Double] = [:]
 	/// Last failure per identifier, cleared when a new attempt starts.
-	private(set) var failures: [String: String] = [:]
+	@Published private(set) var failures: [String: String] = [:]
 
 	private var tasks: [String: Task<Void, Never>] = [:]
 	/// Bumped every time work starts or is called off under an identifier.

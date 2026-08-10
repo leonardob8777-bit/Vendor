@@ -68,7 +68,7 @@ enum SigningPipeline {
 
 		// Scratch lives in tmp so a crash cannot leave it in Documents, where
 		// it would show up in the Files app.
-		let scratch = URL.temporaryDirectory
+		let scratch = FileManager.default.temporaryDirectory
 			.appendingPathComponent("vendor-sign-\(UUID().uuidString)", isDirectory: true)
 		defer { try? fm.removeItem(at: scratch) }
 
@@ -162,7 +162,7 @@ enum SigningPipeline {
 		}
 
 		let fm = FileManager.default
-		let scratch = URL.temporaryDirectory
+		let scratch = FileManager.default.temporaryDirectory
 			.appendingPathComponent("vendor-tweaks-\(UUID().uuidString)", isDirectory: true)
 		defer { try? fm.removeItem(at: scratch) }
 

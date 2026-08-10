@@ -12,6 +12,11 @@ struct FeaturedAppRow: View {
 	let app: FeaturedApp
 	var onOpen: () -> Void
 
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
+
 	var body: some View {
 		Button(action: onOpen) { card }
 			.buttonStyle(.plain)

@@ -10,11 +10,15 @@ struct HomeView: View {
 
 	@Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-	@State private var probe = EngineProbe()
-	@State private var store = CertificateStore.shared
+	@StateObject private var probe = EngineProbe()
+	@ObservedObject private var store = CertificateStore.shared
 	@State private var isVisible = false
 	@State private var browsing: BrowserLink?
 	@State private var pickingLanguage = false
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	private let telegramURL = URL(string: "https://t.me/LBsignapp")!
 	private let websiteURL  = URL(string: "https://leonardob8777-bit.github.io/")!
@@ -63,7 +67,7 @@ struct HomeView: View {
 		.animation(.easeInOut(duration: 0.25), value: pickingLanguage)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content — sharp chrome on top of a floating panel.
-		.toolbar(pickingLanguage ? .hidden : .visible, for: .tabBar)
+		.tabBarVisibility(!pickingLanguage)
 		.inAppBrowser($browsing)
 		.task {
 			probe.run()

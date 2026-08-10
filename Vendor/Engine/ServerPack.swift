@@ -65,7 +65,7 @@ enum ServerPackStore {
 
 	private static let source = URL(string: "https://backloop.dev/pack.json")!
 	private static var cacheURL: URL {
-		URL.documentsDirectory.appendingPathComponent("server-pack.json")
+		FileManager.default.documentsDirectory.appendingPathComponent("server-pack.json")
 	}
 
 	// MARK: Access

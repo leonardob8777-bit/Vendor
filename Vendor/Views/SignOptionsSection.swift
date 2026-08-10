@@ -11,7 +11,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 
 struct SignOptionsSection: View {
 	let item: ImportedIPA
@@ -19,12 +18,16 @@ struct SignOptionsSection: View {
 	@State private var draft: SignOptions
 	@State private var advancedOpen = false
 	@State private var components: [String] = []
-	@State private var pickedPhoto: PhotosPickerItem?
+	@State private var pickingPhoto = false
 	@FocusState private var focused: Field?
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	private enum Field: Hashable { case name, identifier, version }
 
-	private var store: IPAStore { IPAStore.shared }
+	@ObservedObject private var store = IPAStore.shared
 
 	init(item: ImportedIPA) {
 		self.item = item
@@ -50,7 +53,7 @@ struct SignOptionsSection: View {
 				glyph: "square.on.square",
 				isOn: $draft.installAsDuplicate
 			)
-			.onChange(of: draft.installAsDuplicate) { _, on in
+			.onChange(of: draft.installAsDuplicate) { on in
 				applyDuplicate(on)
 			}
 
@@ -60,11 +63,11 @@ struct SignOptionsSection: View {
 				glyph: "bolt",
 				isOn: $draft.enableJIT
 			)
-			.onChange(of: draft.enableJIT) { _, _ in commit() }
+			.onChange(of: draft.enableJIT) { _ in commit() }
 
 			advanced
 		}
-		.onChange(of: focused) { _, now in
+		.onChange(of: focused) { now in
 			// Committing when the field is left rather than on every keystroke.
 			if now == nil { commit() }
 		}
@@ -154,7 +157,9 @@ struct SignOptionsSection: View {
 				.buttonStyle(.plain)
 			}
 
-			PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+			Button {
+				pickingPhoto = true
+			} label: {
 				Text(t("sign.iconChoose"))
 					.font(.system(size: 11, weight: .semibold))
 					.foregroundStyle(Color.brand)
@@ -166,12 +171,9 @@ struct SignOptionsSection: View {
 		.padding(9)
 		.background(.ultraThinMaterial)
 		.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-		.onChange(of: pickedPhoto) { _, picked in
-			guard let picked else { return }
-			Task {
-				guard let data = try? await picked.loadTransferable(type: Data.self),
-					  let name = try? store.saveCustomIcon(data, for: item)
-				else { return }
+		.sheet(isPresented: $pickingPhoto) {
+			SystemImagePicker { data in
+				guard let data, let name = try? store.saveCustomIcon(data, for: item) else { return }
 				draft.customIconName = name
 				commit()
 			}
@@ -266,10 +268,7 @@ struct SignOptionsSection: View {
 					.font(.system(size: 15))
 					.foregroundStyle(removed ? Color.bad : Color.inkSecondary)
 
-				Text(name)
-					.font(.system(size: 11.5))
-					.foregroundStyle(removed ? Color.inkSecondary : Color.inkPrimary)
-					.strikethrough(removed, color: Color.bad.opacity(0.7))
+				componentName(name, removed: removed)
 					.lineLimit(1)
 					.truncationMode(.middle)
 
@@ -280,6 +279,22 @@ struct SignOptionsSection: View {
 			.clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 		}
 		.buttonStyle(.plain)
+	}
+
+	/// `Text.strikethrough` is iOS 16+ in the current SDK. Below that, the
+	/// colour change alone — already applied above — is what marks a removed
+	/// component; the line through it is the iOS 16+ bonus.
+	@ViewBuilder
+	private func componentName(_ name: String, removed: Bool) -> some View {
+		let text = Text(name)
+			.font(.system(size: 11.5))
+			.foregroundStyle(removed ? Color.inkSecondary : Color.inkPrimary)
+
+		if #available(iOS 16, *) {
+			text.strikethrough(removed, color: Color.bad.opacity(0.7))
+		} else {
+			text
+		}
 	}
 
 	// MARK: Writing back

@@ -17,18 +17,17 @@ struct LoadedSource: Identifiable {
 	var title: String { source.name ?? custom?.displayName ?? t("apps.source") }
 }
 
-@Observable
-final class AppsViewModel {
+final class AppsViewModel: ObservableObject {
 	enum State {
 		case loading
 		case loaded([LoadedSource])
 		case failed(String)
 	}
 
-	private(set) var state: State = .loading
+	@Published private(set) var state: State = .loading
 	/// Repositories that were added but could not be read this time, by name.
-	private(set) var unreachable: [String] = []
-	var query = ""
+	@Published private(set) var unreachable: [String] = []
+	@Published var query = ""
 
 	/// Loads every repository at once.
 	///
@@ -105,9 +104,13 @@ final class AppsViewModel {
 }
 
 struct AppsView: View {
-	@State private var model = AppsViewModel()
+	@StateObject private var model = AppsViewModel()
 	@State private var inspecting: AppDetail?
 	@State private var managingSources = false
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	var body: some View {
 		Screen(
@@ -207,7 +210,7 @@ struct AppsView: View {
 		.animation(.easeInOut(duration: 0.25), value: managingSources)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content — sharp chrome on top of a floating panel.
-		.toolbar(inspecting == nil && !managingSources ? .visible : .hidden, for: .tabBar)
+		.tabBarVisibility(inspecting == nil && !managingSources)
 	}
 
 	// MARK: Chrome

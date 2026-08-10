@@ -16,8 +16,12 @@ import SwiftUI
 struct TrustSetupSheet: View {
 	var onClose: () -> Void
 
-	@State private var installer = Installer.shared
+	@ObservedObject private var installer = Installer.shared
 	@State private var failure: String?
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	var body: some View {
 		ZStack {

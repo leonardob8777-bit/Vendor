@@ -10,8 +10,7 @@
 import SwiftUI
 
 /// One job moving through the pipeline.
-@Observable
-final class AppTask: Identifiable {
+final class AppTask: Identifiable, ObservableObject {
 	let id = UUID()
 
 	enum Stage: Int, CaseIterable {
@@ -47,20 +46,20 @@ final class AppTask: Identifiable {
 	/// package skips the download, and the bar should reach 100% at the end of
 	/// the work that actually runs rather than at three quarters.
 	let stages: [Stage]
-	var stage: Stage
+	@Published var stage: Stage
 	/// 0…1 within the current stage.
-	var fraction: Double = 0
+	@Published var fraction: Double = 0
 	/// True while the job is parked on something outside the app — iOS's own
 	/// install prompt. There is no progress to report during it, and the panel
 	/// says so instead of showing a bar that has quietly stopped moving.
-	var awaitingSystem = false
-	var failure: String?
+	@Published var awaitingSystem = false
+	@Published var failure: String?
 	/// Headline shown once the job lands.
 	/// Overwritten by `finish(title:detail:)`, which is the only route to `.done`
 	/// today. Localised anyway: a hardcoded English default in a bilingual app is
 	/// a trap waiting for the first caller that reaches the stage another way.
-	var completionTitle = t("task.done")
-	var completionDetail: String?
+	@Published var completionTitle = t("task.done")
+	@Published var completionDetail: String?
 
 	init(
 		appName: String,
@@ -103,7 +102,11 @@ final class AppTask: Identifiable {
 }
 
 struct TaskProgressSheet: View {
-	@Bindable var task: AppTask
+	@ObservedObject var task: AppTask
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 	/// Offered once the job lands, when the caller has a follow-up to suggest.
 	var primaryAction: (title: String, run: () -> Void)?
 	/// Called to give up on a job that is still running. Without it the panel

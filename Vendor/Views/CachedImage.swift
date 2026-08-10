@@ -41,7 +41,7 @@ final class ImageCache: @unchecked Sendable {
 	}
 
 	private init() {
-		folder = URL.cachesDirectory.appendingPathComponent("Artwork", isDirectory: true)
+		folder = FileManager.default.cachesDirectory.appendingPathComponent("Artwork", isDirectory: true)
 		try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 		memory.countLimit = 200
 	}

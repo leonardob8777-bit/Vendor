@@ -17,7 +17,7 @@
 import Foundation
 import Security
 import UIKit
-import Observation
+import Combine
 
 enum InstallerError: LocalizedError {
 	case noSignedBuild
@@ -39,13 +39,12 @@ enum InstallerError: LocalizedError {
 	}
 }
 
-@Observable
 @MainActor
-final class Installer {
+final class Installer: ObservableObject {
 	static let shared = Installer()
 
 	/// Set once the user has installed and trusted Vendor's authority.
-	var authorityInstalled: Bool {
+	@Published var authorityInstalled: Bool {
 		didSet { UserDefaults.standard.set(authorityInstalled, forKey: Self.trustKey) }
 	}
 
@@ -92,7 +91,7 @@ final class Installer {
 	/// the local server.
 	func authorityFile() async throws -> URL {
 		let identity = try await ensureIdentity()
-		let url = URL.temporaryDirectory.appendingPathComponent("Vendor-Authority.cer")
+		let url = FileManager.default.temporaryDirectory.appendingPathComponent("Vendor-Authority.cer")
 		try identity.authorityDER.write(to: url, options: .atomic)
 		return url
 	}
@@ -192,13 +191,13 @@ final class Installer {
 		// seconds regardless, which cut long installs off mid-transfer. Waiting
 		// for the package to actually go out is the honest end of the job.
 		shutdown = Task { [weak self, server] in
-			let deadline = ContinuousClock.now.advanced(by: .seconds(240))
-			while ContinuousClock.now < deadline, !Task.isCancelled {
+			let deadline = Date().addingTimeInterval(240)
+			while Date() < deadline, !Task.isCancelled {
 				if server.wasDelivered("/app.ipa") { break }
-				try? await Task.sleep(for: .milliseconds(400))
+				try? await Task.sleep(nanoseconds: 400_000_000)
 			}
 			// A breath of slack so installd closes the connection on its terms.
-			try? await Task.sleep(for: .seconds(2))
+			try? await Task.sleep(nanoseconds: 2_000_000_000)
 			// Cancelled means someone else has taken the server over: either
 			// `abort()` or the next install, and both close it themselves before
 			// going on. Closing it here as well would land on whatever has
@@ -240,20 +239,20 @@ final class Installer {
 	/// the caller is still on its way to listening for it: a cancelled install
 	/// missed it and then sat through the entire timeout, leaving a progress
 	/// panel that looked frozen for a minute and a half.
-	func awaitOutcome(timeout: Duration = .seconds(180)) async -> Outcome {
-		let start = ContinuousClock.now
-		let deadline = start.advanced(by: timeout)
+	func awaitOutcome(timeout: TimeInterval = 180) async -> Outcome {
+		let start = Date()
+		let deadline = start.addingTimeInterval(timeout)
 		/// The prompt is a system alert, so Vendor stops being the active app
 		/// while it is up. Coming back only counts once it has gone away.
 		var wasInterrupted = false
-		var returnedAt: ContinuousClock.Instant?
+		var returnedAt: Date?
 
-		while ContinuousClock.now < deadline {
+		while Date() < deadline {
 			if server.wasRequested("/app.ipa") { return .accepted }
 			if Task.isCancelled { return .cancelled }
 
 			if UIApplication.shared.applicationState == .active {
-				if wasInterrupted, returnedAt == nil { returnedAt = ContinuousClock.now }
+				if wasInterrupted, returnedAt == nil { returnedAt = Date() }
 			} else {
 				wasInterrupted = true
 				returnedAt = nil
@@ -262,19 +261,19 @@ final class Installer {
 			// Back in front, prompt gone, package never asked for: it was
 			// dismissed. The grace covers installd beginning its transfer a
 			// moment after the tap, which a quick user would otherwise beat.
-			if let returnedAt, returnedAt.duration(to: .now) > .seconds(4) {
+			if let returnedAt, Date().timeIntervalSince(returnedAt) > 4 {
 				return .cancelled
 			}
 
 			// The prompt never appeared at all: if installd had engaged it would
 			// have read the manifest by now. Nothing is coming.
 			if !wasInterrupted,
-			   start.duration(to: .now) > .seconds(12),
+			   Date().timeIntervalSince(start) > 12,
 			   !server.wasRequested("/manifest.plist") {
 				return .cancelled
 			}
 
-			try? await Task.sleep(for: .milliseconds(200))
+			try? await Task.sleep(nanoseconds: 200_000_000)
 		}
 		return .cancelled
 	}
@@ -318,7 +317,7 @@ final class Installer {
 			format: .xml,
 			options: 0
 		)
-		let url = URL.temporaryDirectory.appendingPathComponent("manifest.plist")
+		let url = FileManager.default.temporaryDirectory.appendingPathComponent("manifest.plist")
 		try data.write(to: url, options: .atomic)
 		return url
 	}

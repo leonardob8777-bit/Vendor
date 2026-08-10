@@ -6,8 +6,12 @@
 import SwiftUI
 
 struct CertificatesView: View {
-	@State private var store = CertificateStore.shared
+	@ObservedObject private var store = CertificateStore.shared
 	@State private var isImporting = false
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	/// Certificates bucketed the way the design groups them.
 	///
@@ -72,7 +76,7 @@ struct CertificatesView: View {
 		.animation(.easeInOut(duration: 0.25), value: isImporting)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content.
-		.toolbar(isImporting ? .hidden : .visible, for: .tabBar)
+		.tabBarVisibility(!isImporting)
 		.onAppear { store.reload() }
 	}
 

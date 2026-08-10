@@ -14,7 +14,7 @@
 //
 
 import Foundation
-import Observation
+import Combine
 import Security
 
 enum CertificateStoreError: LocalizedError {
@@ -31,11 +31,10 @@ enum CertificateStoreError: LocalizedError {
 	}
 }
 
-@Observable
-final class CertificateStore {
+final class CertificateStore: ObservableObject {
 	static let shared = CertificateStore()
 
-	private(set) var certificates: [StoredCertificate] = []
+	@Published private(set) var certificates: [StoredCertificate] = []
 
 	private let fm = FileManager.default
 
@@ -49,7 +48,7 @@ final class CertificateStore {
 	/// promises these never leave the device; they were sitting in a folder made
 	/// for taking things off it.
 	private var root: URL {
-		let url = URL.applicationSupportDirectory.appendingPathComponent("Certificates", isDirectory: true)
+		let url = FileManager.default.applicationSupportDirectory.appendingPathComponent("Certificates", isDirectory: true)
 		if !fm.fileExists(atPath: url.path) {
 			try? fm.createDirectory(at: url, withIntermediateDirectories: true)
 		}
@@ -68,7 +67,7 @@ final class CertificateStore {
 	/// both places is left alone rather than overwritten — the newer location is
 	/// the one in use.
 	private func migrateOutOfDocuments() {
-		let old = URL.documentsDirectory.appendingPathComponent("Certificates", isDirectory: true)
+		let old = FileManager.default.documentsDirectory.appendingPathComponent("Certificates", isDirectory: true)
 		guard fm.fileExists(atPath: old.path) else { return }
 
 		let destination = root
@@ -196,7 +195,7 @@ final class CertificateStore {
 		// This method is not actor-isolated, so awaiting the detached tasks
 		// above hands the rest of it to the cooperative pool — the caller
 		// starts on the main actor and does not return to it. `reload()`
-		// replaces `certificates`, which is `@Observable` state that the Home,
+		// replaces `certificates`, which is `@Published` state that the Home,
 		// IPA and Certificates screens are all reading, so leaving it there
 		// invalidated live views from a background thread every time somebody
 		// imported a certificate. Every other entry point into this store is a

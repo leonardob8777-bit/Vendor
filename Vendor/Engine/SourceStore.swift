@@ -8,7 +8,7 @@
 //
 
 import Foundation
-import Observation
+import Combine
 
 struct CustomSource: Identifiable, Codable, Equatable {
 	let id: UUID
@@ -36,23 +36,22 @@ enum SourceStoreError: LocalizedError {
 	}
 }
 
-@Observable
-final class SourceStore {
+final class SourceStore: ObservableObject {
 	static let shared = SourceStore()
 
-	private(set) var sources: [CustomSource] = []
+	@Published private(set) var sources: [CustomSource] = []
 
 	/// Shipped repositories the user has switched on, by address.
 	///
 	/// Kept in defaults rather than in `sources.json`: it is a preference about
 	/// a repository the app already carries, not a repository record, and
 	/// mixing the two would mean rewriting the file format for a checkbox.
-	private(set) var expanded: Set<String> = []
+	@Published private(set) var expanded: Set<String> = []
 
 	private let fm = FileManager.default
 
 	private var file: URL {
-		let dir = URL.applicationSupportDirectory
+		let dir = FileManager.default.applicationSupportDirectory
 		if !fm.fileExists(atPath: dir.path) {
 			try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 		}

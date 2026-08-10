@@ -44,7 +44,7 @@ struct SwipeToDelete<Content: View>: View {
 				// the card working.
 				.gesture(drag, including: isEnabled ? .all : .subviews)
 		}
-		.onChange(of: isEnabled) { _, enabled in
+		.onChange(of: isEnabled) { enabled in
 			// A card left resting open and then opened for editing would keep the
 			// red panel showing behind it with no way to put it back.
 			if !enabled { reset() }

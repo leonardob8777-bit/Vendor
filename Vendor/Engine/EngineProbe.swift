@@ -6,11 +6,11 @@
 //
 
 import Foundation
+import Combine
 
-@Observable
-final class EngineProbe {
-	private(set) var linked = false
-	private(set) var detail: String?
+final class EngineProbe: ObservableObject {
+	@Published private(set) var linked = false
+	@Published private(set) var detail: String?
 
 	func run() {
 		// Asked about Vendor's own binary rather than a path that cannot exist.

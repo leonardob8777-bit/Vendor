@@ -16,8 +16,12 @@ struct GetButton: View {
 	/// Name of a package shipped inside Vendor, when there is one.
 	var bundledFile: String? = nil
 
-	@State private var downloader = Downloader.shared
-	@State private var store = IPAStore.shared
+	@ObservedObject private var downloader = Downloader.shared
+	@ObservedObject private var store = IPAStore.shared
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	private var progress: Double? { downloader.progress[id] }
 	private var failure: String? { downloader.failures[id] }

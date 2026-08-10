@@ -177,7 +177,7 @@ struct SourceApp: Decodable, Identifiable {
 		return date.formatted(style.locale(Localizer.shared.language.locale))
 	}
 
-	private static let dateZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+	private static let dateZone = TimeZone(secondsFromGMT: 0) ?? TimeZone(identifier: "GMT")!
 
 	/// Release notes with the markdown headings feeds tend to embed stripped out.
 	var releaseNotes: String? {

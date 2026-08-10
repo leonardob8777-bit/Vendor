@@ -8,19 +8,17 @@
 //
 
 import SwiftUI
-import Observation
 
-@Observable
 @MainActor
-final class Router {
+final class Router: ObservableObject {
 	static let shared = Router()
 
-	var tab: RootTabView.Tab = .home
+	@Published var tab: RootTabView.Tab = .home
 
 	/// Package the IPA tab should open the next time it is shown. Cleared as
 	/// soon as it has been acted on, so coming back to the tab later does not
 	/// re-open a card the user has since closed.
-	var revealPackage: UUID?
+	@Published var revealPackage: UUID?
 
 	private init() {}
 

@@ -8,6 +8,10 @@ import SwiftUI
 struct GuideView: View {
 	@State private var query = ""
 	@State private var opened: GuideEntry?
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 
 	private var filtered: [GuideEntry] {
 		guard !query.isEmpty else { return GuideContent.all }
@@ -53,7 +57,7 @@ struct GuideView: View {
 		// own content puts on screen — sharp chrome sitting on top of a panel
 		// that is meant to be floating clear of the screen. Taking it away for
 		// as long as the guide is open is what finishes the effect.
-		.toolbar(opened == nil ? .visible : .hidden, for: .tabBar)
+		.tabBarVisibility(opened == nil)
 	}
 
 	/// A search with no hits used to leave the screen blank below the field,

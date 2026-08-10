@@ -8,7 +8,7 @@
 //
 
 import Foundation
-import Observation
+import Combine
 
 struct ImportedIPA: Identifiable, Codable, Equatable {
 	let id: UUID
@@ -96,16 +96,15 @@ enum IPAStoreError: LocalizedError {
 	}
 }
 
-@Observable
-final class IPAStore {
+final class IPAStore: ObservableObject {
 	static let shared = IPAStore()
 
-	private(set) var packages: [ImportedIPA] = []
+	@Published private(set) var packages: [ImportedIPA] = []
 
 	private let fm = FileManager.default
 
 	private var root: URL {
-		let url = URL.documentsDirectory.appendingPathComponent("IPAs", isDirectory: true)
+		let url = FileManager.default.documentsDirectory.appendingPathComponent("IPAs", isDirectory: true)
 		if !fm.fileExists(atPath: url.path) {
 			try? fm.createDirectory(at: url, withIntermediateDirectories: true)
 		}

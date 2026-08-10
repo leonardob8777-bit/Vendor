@@ -18,6 +18,11 @@ struct GuideDetailSheet: View {
 	/// Called by the close button and by a tap outside the panel.
 	var dismiss: () -> Void
 
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
+
 	var body: some View {
 		ZStack {
 			// Deliberately no dimming layer. A veil over the whole screen also
@@ -67,7 +72,7 @@ struct GuideDetailSheet: View {
 			}
 			// A guide short enough to fit shouldn't rubber-band as though there
 			// were more below it.
-			.scrollBounceBehavior(.basedOnSize)
+			.scrollBounceBehaviorCompat()
 			// Long guides run past the bottom edge, and a line of text sliced
 			// in half by the pane's border reads as clipped rather than
 			// scrollable. Fading the last stretch says there is more below.
