@@ -150,12 +150,23 @@ final class InstallServer {
 		// an NWListener nobody holds keeps its port for the life of the process.
 		// Normally there is nothing here — installing stops the server before it
 		// starts one — but two installs overlapping is enough to reach it.
+		replaceListener(with: listener, port: assigned)?.cancel()
+	}
+
+	/// Swaps in the new listener under `lock` and hands back whatever was there
+	/// before, for the caller to cancel once the lock is released.
+	///
+	/// Split out of `start` because `start` is `async`, and taking `lock`
+	/// directly from an async function's body is flagged as unsafe from Swift
+	/// 6 on — the lock is only ever held here, synchronously, never across a
+	/// suspension point.
+	private func replaceListener(with listener: NWListener, port: UInt16) -> NWListener? {
 		lock.lock()
+		defer { lock.unlock() }
 		let previous = self.listener
 		self.listener = listener
-		self.port = assigned
-		lock.unlock()
-		previous?.cancel()
+		self.port = port
+		return previous
 	}
 
 	func stop() {
