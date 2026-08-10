@@ -71,7 +71,8 @@ struct ProvisioningProfile {
 		guard let open = "<?xml".data(using: .utf8),
 			  let close = "</plist>".data(using: .utf8),
 			  let start = data.range(of: open),
-			  let end = data.range(of: close, options: .backwards)
+			  let end = data.range(of: close, options: .backwards),
+			  start.lowerBound < end.upperBound
 		else { return nil }
 		return data.subdata(in: start.lowerBound..<end.upperBound)
 	}
