@@ -114,7 +114,20 @@ extension StringProtocol {
 // MARK: - Table
 
 enum Strings {
-	static let table: [String: (en: String, es: String)] = [
+	typealias Entry = (en: String, es: String)
+
+	/// Keys a screen adds for itself live in that screen's own `Strings+*.swift`,
+	/// so reworking two screens at once never means editing one shared table.
+	static let table: [String: Entry] = extras.reduce(into: core) { table, extra in
+		table.merge(extra) { _, added in added }
+	}
+
+	private static let extras: [[String: Entry]] = [
+		homeExtras, appsExtras, detailExtras, ipaExtras,
+		certificatesExtras, guideExtras, chromeExtras,
+	]
+
+	static let core: [String: Entry] = [
 
 		// Tabs
 		"tab.home":         (en: "Home",         es: "Inicio"),
