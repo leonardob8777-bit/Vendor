@@ -61,6 +61,43 @@ struct SignOptions: Codable, Equatable {
 		&& removedComponents.isEmpty
 	}
 
+	/// How many traits of the package have actually been changed.
+	///
+	/// For the badge on the folded options, so a package says whether it is
+	/// being signed as it arrived without having to be unfolded and read.
+	/// ``installAsDuplicate`` is not counted: it has no effect of its own, it
+	/// writes an identifier — and counting both would report two changes for one.
+	var changeCount: Int {
+		var count = removedComponents.count
+		if nameOverride != nil       { count += 1 }
+		if identifierOverride != nil { count += 1 }
+		if versionOverride != nil    { count += 1 }
+		if customIconName != nil     { count += 1 }
+		if enableJIT                 { count += 1 }
+		return count
+	}
+
+	/// Whether a typed identifier has a shape iOS will accept.
+	///
+	/// Only the shape, and only enough of it to catch a typo where it is made.
+	/// A bundle identifier is reverse-DNS, and one carrying a space or a slash
+	/// is refused at install time — which is the whole signing run later, on a
+	/// screen that cannot say which field caused it. An empty field is fine: it
+	/// means the package keeps its own.
+	static func identifierIsAcceptable(_ raw: String) -> Bool {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return true }
+		// Spelled out rather than `CharacterSet.alphanumerics`, which counts é
+		// and ñ as letters. iOS does not: an accent in an identifier is refused
+		// just as a space is, and in the Spanish half of the app that is the
+		// likelier typo of the two.
+		return trimmed.unicodeScalars.allSatisfy { identifierCharacters.contains($0) }
+	}
+
+	private static let identifierCharacters = CharacterSet(
+		charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-"
+	)
+
 	// MARK: Duplicate identifiers
 
 	/// Builds the identifier a duplicate install should carry.

@@ -2,10 +2,16 @@
 //  InstallRing.swift
 //  Vendor
 //
-//  App icon wrapped in a progress ring. The ring's colour sweeps red →
-//  orange → green as it fills, so the colour alone says how far along the
-//  install is. Behind both the icon and the ring sits a soft halo tinted the
-//  same way, echoing the mark on the Profile screen.
+//  App icon wrapped in a progress ring. The ring's colour travels the same
+//  road the app's own gradients do — the mint of "got it" through the brand
+//  purple of the work into the magenta of Install — so the colour alone says
+//  how far along the job is. Behind both the icon and the ring sits a soft halo
+//  tinted the same way, echoing the mark on the Profile screen.
+//
+//  It used to run red → orange → green. That put a healthy job at 8% behind a
+//  red ring, which in an app where red means `.bad` everywhere else reads as
+//  failure — and it left `failed` with no colour of its own to fail in. Red is
+//  now only ever a failure, and the sweep says progress instead of health.
 //
 
 import SwiftUI
@@ -18,22 +24,33 @@ struct InstallRing: View {
 	var failed: Bool = false
 
 	@Environment(\.accessibilityReduceMotion) private var reduceMotion
+	/// Not read directly — its presence keeps this view subscribed to
+	/// `Localizer.shared`, so every `t(...)` call below redraws when the
+	/// language flips.
+	@ObservedObject private var localizer = Localizer.shared
 	@State private var breathing = false
+	/// Drives the one-shot bloom when the ring closes.
+	@State private var landed = false
 
 	private var thickness: CGFloat { diameter * 0.055 }
 
-	private static let red    = Color(red: 0.94, green: 0.27, blue: 0.27)
-	private static let orange = Color(red: 0.98, green: 0.58, blue: 0.13)
-	private static let green  = Color(red: 0.18, green: 0.83, blue: 0.45)
+	// Fixed literals rather than the adaptive palette on purpose: blending
+	// needs real components, and `UIColor(dynamicColour).cgColor` resolves
+	// against whatever trait collection happens to be current when it is read,
+	// which inside a computed property is not reliably the view's own. These
+	// are the stops of `LinearGradient.actionFlow` and `.actionInstall`.
+	private static let start  = Color(red: 0.169, green: 0.725, blue: 0.541)
+	private static let middle = Color(red: 0.427, green: 0.290, blue: 1.000)
+	private static let end    = Color(red: 0.878, green: 0.224, blue: 0.608)
 
-	/// Position on the red → orange → green scale, weighted so green takes
-	/// over early and holds for most of the run.
+	/// Position on the mint → violet → magenta scale, weighted so the purple
+	/// arrives early and holds through the long middle of a signing run.
 	private static func scale(_ t: Double) -> Color {
 		let t = min(max(t, 0), 1)
-		if t < 0.22 {
-			return blend(red, orange, t / 0.22)
+		if t < 0.28 {
+			return blend(start, middle, t / 0.28)
 		}
-		return blend(orange, green, min((t - 0.22) / 0.28, 1))
+		return blend(middle, end, min((t - 0.28) / 0.62, 1))
 	}
 
 	private static func blend(_ a: Color, _ b: Color, _ amount: Double) -> Color {
@@ -50,8 +67,8 @@ struct InstallRing: View {
 	/// Colour at the leading edge of the arc.
 	private var headColour: Color { failed ? .bad : Self.scale(progress) }
 	/// Colour where the arc began. It trails behind the head, and catches up
-	/// as the ring closes — so at 100% both ends are green and the join is
-	/// invisible instead of a red-against-green stripe.
+	/// as the ring closes — so at 100% both ends have arrived and the join is
+	/// invisible instead of a mint-against-magenta stripe.
 	private var tailColour: Color { failed ? .bad : Self.scale(progress - 0.30) }
 
 	/// Solid colour used by the halo and glow.
@@ -72,10 +89,17 @@ struct InstallRing: View {
 		ZStack {
 			halo
 			track
+			bloom
 			arc
 			icon
 		}
 		.frame(width: diameter * 1.5, height: diameter * 1.5)
+		// One element, not four unlabelled shapes. VoiceOver read the icon's
+		// image and nothing else, so the one number the panel exists to report
+		// was the one thing it could not say.
+		.accessibilityElement(children: .ignore)
+		.accessibilityLabel(t("ipa.ringProgress"))
+		.accessibilityValue(failed ? t("ipa.ringStopped") : "\(Int(min(max(progress, 0), 1) * 100))%")
 		.onAppear {
 			guard !reduceMotion else { return }
 			DispatchQueue.main.async {
@@ -83,6 +107,15 @@ struct InstallRing: View {
 					breathing = true
 				}
 			}
+		}
+		.onChange(of: progress) { now in
+			// The moment the ring closes is the moment the job landed, and it
+			// went by with the arc simply stopping. One ring thrown outwards is
+			// enough to mark it — and it is a one-shot, so reduce-motion is the
+			// only reason to skip it.
+			guard !reduceMotion, !failed, now >= 0.999, !landed else { return }
+			landed = true
+			withAnimation(.easeOut(duration: 0.85)) { }
 		}
 	}
 
@@ -109,6 +142,17 @@ struct InstallRing: View {
 		Circle()
 			.stroke(Color.inkSecondary.opacity(0.18), lineWidth: thickness)
 			.frame(width: diameter, height: diameter)
+	}
+
+	/// The ring thrown off when the job lands. Drawn under the arc so it looks
+	/// like something the arc gave off rather than something laid over it.
+	private var bloom: some View {
+		Circle()
+			.stroke(tone.opacity(0.9), lineWidth: thickness * 0.7)
+			.frame(width: diameter, height: diameter)
+			.scaleEffect(landed ? 1.35 : 1)
+			.opacity(landed ? 0 : 0.9)
+			.animation(.easeOut(duration: 0.85), value: landed)
 	}
 
 	private var arc: some View {
