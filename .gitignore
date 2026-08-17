@@ -13,3 +13,6 @@ Packages/
 
 # macOS
 .DS_Store
+
+# Local Claude Code state (worktrees, etc.)
+.claude/
