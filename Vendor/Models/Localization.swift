@@ -269,6 +269,10 @@ enum Strings {
 		// Featured apps. The blurbs Vendor writes itself, unlike the
 		// descriptions that arrive inside a repository feed — those are the
 		// uploader's words and there is nothing to translate them against.
+		"featured.eagle.summary": (
+			en: "Dock and Dynamic Island colour personalization, powered by DarkSword.",
+			es: "Personalización de color del Dock y la Dynamic Island, con DarkSword."
+		),
 		"featured.lara.summary": (
 			en: "Toolkit for tweaking iOS system settings and behaviour.",
 			es: "Kit de herramientas para ajustar la configuración y el comportamiento de iOS."

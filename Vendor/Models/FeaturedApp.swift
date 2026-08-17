@@ -52,6 +52,23 @@ struct FeaturedApp: Identifiable {
 /// spells its entries out as `var`. `id` is a fixed slug, so `ForEach` sees the
 /// same identity across rebuilds.
 extension FeaturedApp {
+	/// Dock/Dynamic Island personalization tool. Same author as Lara — the
+	/// bundle ID it ships under is literally `laracustom` — and the newest of
+	/// the five, which is what earns the NEW chip.
+	static var eagle: FeaturedApp { FeaturedApp(
+		id: "eagle",
+		name: "Eagle",
+		developer: "Leonardo Bt",
+		summary: t("featured.eagle.summary"),
+		badges: [("NEW", .new)],
+		glow: .mint,
+		iconURL: nil,
+		iconAsset: "EagleIcon",
+		downloadURL: URL(string: "https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.7/Eagle.ipa")!,
+		size: 11_330_936,
+		version: "0.3.0"
+	) }
+
 	/// System tweaking toolkit, distributed as a raw .ipa to sign yourself.
 	static var lara: FeaturedApp { FeaturedApp(
 		id: "lara",
@@ -132,5 +149,5 @@ extension FeaturedApp {
 		version: "1.0"
 	) }
 
-	static var all: [FeaturedApp] { [.ffds, .turbomax, .lara, .infern0, .cyanide] }
+	static var all: [FeaturedApp] { [.eagle, .ffds, .turbomax, .lara, .infern0, .cyanide] }
 }
