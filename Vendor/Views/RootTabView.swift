@@ -34,10 +34,12 @@ struct RootTabView: View {
 	}
 
 	@ObservedObject private var router = Router.shared
+	@ObservedObject private var appLock = AppLock.shared
 	/// Not read directly — its presence keeps this view subscribed to
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
 	@ObservedObject private var localizer = Localizer.shared
+	@Environment(\.scenePhase) private var scenePhase
 
 	init() {
 		// The tab bar sizes itself from its item metrics, so a larger label
@@ -91,6 +93,22 @@ struct RootTabView: View {
 		// again on every import or delete after that.
 		.onReceive(CertificateStore.shared.$certificates) { certificates in
 			CertificateExpiryNotifier.sync(certificates)
+		}
+		// `.background`, not `.inactive`: `.inactive` also covers the moment
+		// Control Center or a system alert slides over the app, which would
+		// lock Vendor every time someone checks the time from Control Center.
+		// `.background` is only the app actually leaving the screen.
+		.onChange(of: scenePhase) { phase in
+			if phase == .background { appLock.lockIfEnabled() }
+		}
+		// Full-screen, not blurred content underneath like every other panel
+		// here — see AppLockView's own note on why. No transition: appearing
+		// mid-fade would show a flash of real content around its edges for
+		// the one screen that exists to prevent exactly that.
+		.overlay {
+			if appLock.isLocked {
+				AppLockView()
+			}
 		}
 	}
 

@@ -56,6 +56,7 @@ struct SettingsView: View {
 	var dismiss: () -> Void
 
 	@AppStorage("appearanceOverride") private var appearanceOverride = AppearanceOption.system.rawValue
+	@AppStorage("appLockEnabled") private var appLockEnabled = false
 	/// Not read directly — its presence keeps this view subscribed to
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
@@ -104,6 +105,7 @@ struct SettingsView: View {
 				VStack(alignment: .leading, spacing: 18) {
 					header
 					appearanceSection
+					securitySection
 					aboutSection
 					linksSection
 					openSourceSection
@@ -236,6 +238,38 @@ struct SettingsView: View {
 			)
 		}
 		.buttonStyle(.plain)
+	}
+
+	// MARK: Security
+
+	private var securitySection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			SectionLabel(text: t("settings.security"))
+			HStack(spacing: 12) {
+				GlyphTile(systemName: "faceid", size: 40)
+				VStack(alignment: .leading, spacing: 2) {
+					Text(t("settings.appLock"))
+						.font(.system(size: 13, weight: .semibold))
+						.foregroundStyle(Color.inkPrimary)
+					Text(
+						AppLock.shared.canAuthenticate()
+							? t("settings.appLockDetail")
+							: t("settings.appLockUnavailable")
+					)
+					.font(.system(size: 11))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
+				}
+				Spacer(minLength: 8)
+				Toggle("", isOn: $appLockEnabled)
+					.labelsHidden()
+					.tint(.brand)
+					.disabled(!AppLock.shared.canAuthenticate())
+			}
+			.padding(10)
+			.background(.ultraThinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+		}
 	}
 
 	// MARK: About

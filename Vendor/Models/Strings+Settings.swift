@@ -43,6 +43,18 @@ extension Strings {
 			es: "falta el texto de la licencia en esta versión."
 		),
 
+		// Security
+		"settings.security": (en: "Security", es: "Seguridad"),
+		"settings.appLock": (en: "Require Face ID", es: "Requerir Face ID"),
+		"settings.appLockDetail": (
+			en: "Lock Vendor whenever it leaves the foreground. Your certificates already never leave the phone — this keeps them from opening on it either, if someone else picks it up.",
+			es: "Bloquea Vendor cada vez que deja de estar en primer plano. Tus certificados ya nunca salen del teléfono — esto evita que se abran en él también, si alguien más lo toma."
+		),
+		"settings.appLockUnavailable": (
+			en: "No Face ID, Touch ID or passcode set up on this device.",
+			es: "Este dispositivo no tiene Face ID, Touch ID ni código configurado."
+		),
+
 		// Storage
 		"settings.storage": (en: "Storage", es: "Almacenamiento"),
 		"settings.storageDetail": (
@@ -51,5 +63,15 @@ extension Strings {
 		),
 		"settings.clearCache":   (en: "Clear cached images", es: "Borrar imágenes en caché"),
 		"settings.cacheCleared": (en: "Cache cleared",        es: "Caché borrada"),
+
+		// The lock screen itself — shown over everything else, so it reads
+		// apart from the rest of Settings even though the toggle lives there.
+		"lock.title":  (en: "Vendor is locked", es: "Vendor está bloqueado"),
+		"lock.detail": (
+			en: "Unlock to get back to your certificates and packages.",
+			es: "Desbloquea para volver a tus certificados y paquetes."
+		),
+		"lock.unlock": (en: "Unlock", es: "Desbloquear"),
+		"lock.reason": (en: "Unlock Vendor", es: "Desbloquear Vendor"),
 	]
 }
