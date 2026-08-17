@@ -12,6 +12,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct TrustSetupSheet: View {
 	var onClose: () -> Void
@@ -140,6 +141,25 @@ struct TrustSetupSheet: View {
 					.shadow(color: Color.brand.opacity(0.4), radius: 10, y: 4)
 			}
 
+			// A shortcut for steps 2 and 3, which otherwise mean leaving the
+			// app and finding Settings' own way there by hand.
+			VStack(spacing: 6) {
+				Button {
+					openSettings()
+				} label: {
+					Text(t("trust.openSettings"))
+						.font(.system(size: 14, weight: .semibold))
+						.foregroundStyle(Color.brand)
+						.frame(maxWidth: .infinity)
+						.padding(.vertical, 10)
+						.background(Capsule().fill(Color.brandSoft))
+				}
+				Text(t("trust.openSettingsHint"))
+					.font(.system(size: 11))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+
 			// Trusting happens in Settings, out of the app's sight; the only
 			// honest thing is to let the user say when they are done.
 			Button {
@@ -174,5 +194,13 @@ struct TrustSetupSheet: View {
 				failure = error.localizedDescription
 			}
 		}
+	}
+
+	/// `openSettingsURLString` always lands on Vendor's own page, never the
+	/// root list — that's the one thing worth warning about, since Profile
+	/// Downloaded only ever shows up a level above it.
+	private func openSettings() {
+		guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+		UIApplication.shared.open(url)
 	}
 }

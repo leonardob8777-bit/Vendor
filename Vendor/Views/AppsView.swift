@@ -103,10 +103,31 @@ final class AppsViewModel: ObservableObject {
 	}
 }
 
+/// How a repository's apps are ordered on screen. Session-only: nobody has
+/// asked for this to survive a relaunch, and persisting it would mean a
+/// migration path the day the sort list grows past three cases.
+private enum AppSortOption: CaseIterable, Hashable {
+	case feed, name, size
+
+	var title: String {
+		switch self {
+		case .feed: return t("apps.sortFeed")
+		case .name: return t("apps.sortName")
+		case .size: return t("apps.sortSize")
+		}
+	}
+}
+
 struct AppsView: View {
 	@StateObject private var model = AppsViewModel()
 	@State private var inspecting: AppDetail?
 	@State private var managingSources = false
+	@State private var sortOption: AppSortOption = .feed
+	/// Repositories folded away for this session, by `LoadedSource.id`. One of
+	/// the shipped ones runs past eight thousand entries, and building that
+	/// many rows is not something a Lazy stack alone saves you from — the
+	/// section has to be skipped, not just laid out off-screen.
+	@State private var collapsedSources: Set<String> = []
 	/// Not read directly — its presence keeps this view subscribed to
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
@@ -123,6 +144,12 @@ struct AppsView: View {
 			contentBlur: inspecting == nil && !managingSources ? 0 : 16
 		) {
 			searchField.scrollEdgeSoftening()
+			if !model.query.isEmpty { searchSummary }
+
+			// A heading of its own: without one these sat above the first
+			// repository's header and read as belonging to it, which is the one
+			// thing they are not.
+			SectionLabel(text: t("apps.featured"))
 
 			// Pinned above the remote source so it stays first whatever the
 			// feed returns.
@@ -156,20 +183,24 @@ struct AppsView: View {
 					.filter { !$0.1.isEmpty }
 
 				if sections.isEmpty {
-					emptyState
+					emptyState(query: model.query)
 				} else {
 					// Lazy, not a plain VStack: one of the shipped repositories
 					// lists over eight thousand apps, and building every row up
 					// front freezes the tab on arrival.
 					ForEach(sections, id: \.0.id) { entry, apps in
 						sourceHeader(entry, count: apps.count)
-						LazyVStack(spacing: 8) {
-							ForEach(apps) { app in
-								Button { inspecting = AppDetail(app) } label: {
-									row(for: app)
+						// Collapsed sections skip the ForEach entirely rather than
+						// hiding it — a LazyVStack still has to lay out whatever it
+						// is handed the moment it scrolls near, and eight thousand
+						// rows behind one folded header is exactly the case this
+						// exists for.
+						if !collapsedSources.contains(entry.id) {
+							LazyVStack(spacing: 8) {
+								ForEach(sortedApps(apps)) { app in
+									AppsRow(app: app) { inspecting = AppDetail(app) }
+										.scrollEdgeSoftening()
 								}
-								.buttonStyle(.plain)
-								.scrollEdgeSoftening()
 							}
 						}
 					}
@@ -217,6 +248,8 @@ struct AppsView: View {
 
 	private var toolbarButtons: some View {
 		HStack(spacing: 8) {
+			sortMenu
+
 			Button {
 				Haptics.tap()
 				managingSources = true
@@ -230,6 +263,22 @@ struct AppsView: View {
 
 			reloadButton
 		}
+	}
+
+	private var sortMenu: some View {
+		Menu {
+			Picker(t("apps.sort"), selection: $sortOption) {
+				ForEach(AppSortOption.allCases, id: \.self) { option in
+					Text(option.title).tag(option)
+				}
+			}
+		} label: {
+			Image(systemName: "arrow.up.arrow.down")
+				.font(.system(size: 15, weight: .semibold))
+				.foregroundStyle(Color.inkPrimary)
+				.glassCircle(size: 34)
+		}
+		.accessibilityLabel(t("apps.sort"))
 	}
 
 	private var reloadButton: some View {
@@ -264,26 +313,88 @@ struct AppsView: View {
 		.shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 2)
 	}
 
-	private func sourceHeader(_ entry: LoadedSource, count: Int) -> some View {
-		HStack(spacing: 6) {
-			SectionLabel(text: entry.title)
-			Badge(text: "\(count)", tone: .brand)
-			Spacer(minLength: 0)
+	/// Count and a Clear button, shown under the field once there is a query
+	/// to describe. Silent otherwise — a row that only ever reads "0 results"
+	/// or repeats the obvious while empty earns its place less than not
+	/// being there.
+	private var searchSummary: some View {
+		HStack(spacing: 8) {
+			Text(resultsText)
+				.font(.system(size: 12, weight: .medium))
+				.foregroundStyle(Color.inkSecondary)
+			Spacer(minLength: 8)
+			Button {
+				Haptics.tap()
+				model.query = ""
+			} label: {
+				Text(t("apps.clearSearch"))
+					.font(.system(size: 12, weight: .semibold))
+					.foregroundStyle(Color.brand)
+			}
 		}
+	}
+
+	private var resultsText: String {
+		guard case .loaded(let loaded) = model.state else { return "" }
+		let count = loaded.reduce(0) { $0 + model.matches($1.source).count }
+		return count == 1 ? t("apps.resultsOne") : String(format: t("apps.results"), count)
+	}
+
+	private func sourceHeader(_ entry: LoadedSource, count: Int) -> some View {
+		let collapsed = collapsedSources.contains(entry.id)
+		return Button {
+			Haptics.tap()
+			withAnimation(.easeInOut(duration: 0.2)) {
+				if collapsed {
+					collapsedSources.remove(entry.id)
+				} else {
+					collapsedSources.insert(entry.id)
+				}
+			}
+		} label: {
+			HStack(spacing: 6) {
+				SectionLabel(text: entry.title)
+				Badge(text: "\(count)", tone: .brand)
+				Spacer(minLength: 0)
+				Image(systemName: "chevron.down")
+					.font(.system(size: 11, weight: .bold))
+					.foregroundStyle(Color.inkSecondary)
+					.rotationEffect(.degrees(collapsed ? -90 : 0))
+			}
+			.contentShape(Rectangle())
+		}
+		.buttonStyle(.plain)
+		.accessibilityLabel(collapsed ? t("apps.showApps") : t("apps.hideApps"))
+	}
+
+	/// As published, alphabetical, or biggest first. Session-only — there is
+	/// nothing here worth a migration path yet.
+	private func sortedApps(_ apps: [SourceApp]) -> [SourceApp] {
+		switch sortOption {
+		case .feed:
+			return apps
+		case .name:
+			return apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+		case .size:
+			return apps.sorted { rawSize($0) > rawSize($1) }
+		}
+	}
+
+	/// Bytes behind `displaySize`, for sorting rather than showing — an app
+	/// the feed never reported a size for sinks to the bottom rather than
+	/// breaking the comparator.
+	private func rawSize(_ app: SourceApp) -> Int64 {
+		app.versions?.first?.size ?? app.size ?? 0
 	}
 
 	// MARK: States
 
 	private var loadingState: some View {
-		VStack(spacing: 12) {
-			ProgressView().controlSize(.large)
-			Text(t("apps.loading"))
-				.font(.system(size: 13))
-				.foregroundStyle(Color.inkSecondary)
+		VStack(spacing: 8) {
+			ForEach(0..<5, id: \.self) { index in
+				AppsRowSkeleton(index: index)
+			}
 		}
-		.frame(maxWidth: .infinity)
-		.padding(.vertical, 44)
-		.card()
 	}
 
 	private func failureState(_ message: String) -> some View {
@@ -313,86 +424,24 @@ struct AppsView: View {
 		.card()
 	}
 
-	private var emptyState: some View {
+	/// The generic heading covers both causes — nothing loaded, or nothing
+	/// matched — and only the second one has a query worth quoting back, so
+	/// the detail line only appears when there is one.
+	private func emptyState(query: String) -> some View {
 		VStack(spacing: 8) {
 			GlyphTile(systemName: "magnifyingglass", size: 46)
 			Text(t("apps.noMatches"))
 				.font(.system(size: 15, weight: .semibold))
 				.foregroundStyle(Color.inkPrimary)
+			if !query.isEmpty {
+				Text(String(format: t("apps.noMatchesDetail"), query))
+					.font(.system(size: 12))
+					.foregroundStyle(Color.inkSecondary)
+					.multilineTextAlignment(.center)
+			}
 		}
 		.frame(maxWidth: .infinity)
 		.padding(.vertical, 34)
 		.card()
-	}
-
-	// MARK: Row
-
-	private func row(for app: SourceApp) -> some View {
-		HStack(spacing: 12) {
-			icon(for: app)
-
-			VStack(alignment: .leading, spacing: 3) {
-				Text(app.name)
-					.font(.system(size: 15, weight: .semibold))
-					.foregroundStyle(Color.inkPrimary)
-					.lineLimit(1)
-
-				if let developer = app.developerName {
-					Text(developer)
-						.font(.system(size: 11))
-						.foregroundStyle(Color.inkSecondary)
-						.lineLimit(1)
-				}
-
-				if let subtitle = app.subtitle {
-					Text(subtitle)
-						.font(.system(size: 11))
-						.foregroundStyle(Color.inkSecondary)
-						.lineLimit(1)
-				}
-			}
-
-			Spacer(minLength: 8)
-
-			VStack(alignment: .trailing, spacing: 5) {
-				// Fetching is always green; the colour shifts towards purple
-				// only once the app moves further down the pipeline.
-				GetButton(
-					id: app.bundleIdentifier,
-					downloadURL: app.downloadLink,
-					fileName: app.suggestedFileName
-				)
-
-				HStack(spacing: 4) {
-					if let version = app.displayVersion {
-						// Some feeds ship git-describe strings; keep them short.
-						Text(version.count > 10 ? String(version.prefix(10)) + "…" : version)
-					}
-					if let size = app.displaySize {
-						Text("·")
-						Text(size)
-					}
-				}
-				.font(.system(size: 10))
-				.foregroundStyle(Color.inkSecondary)
-				.lineLimit(1)
-				.fixedSize(horizontal: true, vertical: false)
-			}
-		}
-		.card(padding: 11)
-	}
-
-	@ViewBuilder
-	private func icon(for app: SourceApp) -> some View {
-		CachedImage(url: app.iconLink) {
-			ZStack {
-				Color.brandSoft
-				Image(systemName: "square.dashed")
-					.font(.system(size: 18, weight: .medium))
-					.foregroundStyle(Color.brand)
-			}
-		}
-		.frame(width: 46, height: 46)
-		.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 	}
 }

@@ -638,6 +638,14 @@ struct IPAView: View {
 							.font(.system(size: 11, weight: .medium))
 					}
 					.foregroundStyle(ready ? Color.ok : Color.mint)
+
+					// Same reasoning as the state line above, for
+					// `SignOptions.changeCount`: whether this package is being
+					// signed as it arrived, without opening the card to read
+					// every field in `SignOptionsSection`.
+					if !isOpen, item.options.changeCount > 0 {
+						Badge(text: changeSummary(item.options.changeCount), tone: .brand)
+					}
 				}
 
 				Spacer(minLength: 6)
@@ -663,6 +671,10 @@ struct IPAView: View {
 		withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
 			expanded = isOpen ? nil : item.id
 		}
+	}
+
+	private func changeSummary(_ count: Int) -> String {
+		count == 1 ? t("sign.changeOne") : String(format: t("sign.changeMany"), "\(count)")
 	}
 
 	/// Artwork for the install ring and the card.

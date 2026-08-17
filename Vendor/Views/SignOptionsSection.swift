@@ -36,16 +36,31 @@ struct SignOptionsSection: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 10) {
-			SectionLabel(text: t("sign.options"))
+			optionsHeader
+
+			// Nothing left to summarize in a badge, so the reassurance is spelled
+			// out instead — the whole point of `changeCount` is not making anyone
+			// read every field below to find that out.
+			if draft.changeCount == 0 {
+				Text(t("sign.untouched"))
+					.font(.system(size: 10))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+
+			groupHeader(t("sign.groupIdentity"))
 
 			field(t("sign.name"), text: $draft.displayName,
-				  placeholder: item.name, field: .name)
+				  placeholder: item.name, field: .name, why: t("sign.nameWhy"))
 			field(t("sign.bundleID"), text: $draft.bundleIdentifier,
-				  placeholder: item.bundleIdentifier ?? "—", field: .identifier)
+				  placeholder: item.bundleIdentifier ?? "—", field: .identifier,
+				  why: t("sign.bundleIDWhy"), error: identifierError)
 			field(t("sign.version"), text: $draft.version,
-				  placeholder: item.version ?? "—", field: .version)
+				  placeholder: item.version ?? "—", field: .version, why: t("sign.versionWhy"))
 
 			iconRow
+
+			groupHeader(t("sign.groupInstall"))
 
 			optionToggle(
 				title: t("sign.duplicate"),
@@ -74,109 +89,172 @@ struct SignOptionsSection: View {
 		.onDisappear { commit() }
 	}
 
+	// MARK: Header
+
+	/// The label the card shows before it is opened — `changeCount` is what
+	/// lets that row say this without the fields underneath ever being read.
+	private var optionsHeader: some View {
+		HStack(spacing: 8) {
+			SectionLabel(text: t("sign.options"))
+			Spacer(minLength: 0)
+			if draft.changeCount > 0 {
+				Badge(text: changeSummary, tone: .brand)
+				Button(action: resetAll) {
+					Text(t("sign.resetAll"))
+						.font(.system(size: 11, weight: .semibold))
+						.foregroundStyle(Color.bad)
+				}
+				.buttonStyle(.plain)
+			}
+		}
+	}
+
+	private var changeSummary: String {
+		draft.changeCount == 1
+			? t("sign.changeOne")
+			: String(format: t("sign.changeMany"), "\(draft.changeCount)")
+	}
+
+	/// Sub-heading inside the options block, one weight down from
+	/// `SectionLabel` so "How it looks" and "How it installs" read as
+	/// subdivisions of "Before signing" rather than sections of their own.
+	private func groupHeader(_ text: String) -> some View {
+		Text(text)
+			.font(.system(size: 11, weight: .semibold))
+			.foregroundStyle(Color.inkSecondary)
+			.frame(maxWidth: .infinity, alignment: .leading)
+	}
+
+	/// Whether the bundle ID as typed has a shape iOS will accept. Nil once
+	/// the field is empty — that means keep the package's own, which is
+	/// always fine.
+	private var identifierError: String? {
+		guard !draft.bundleIdentifier.isEmpty else { return nil }
+		return SignOptions.identifierIsAcceptable(draft.bundleIdentifier) ? nil : t("sign.badIdentifier")
+	}
+
 	// MARK: Text fields
 
 	private func field(
 		_ label: String,
 		text: Binding<String>,
 		placeholder: String,
-		field: Field
+		field: Field,
+		why: String,
+		error: String? = nil
 	) -> some View {
-		HStack(spacing: 10) {
-			Text(label)
-				.font(.system(size: 12))
-				.foregroundStyle(Color.inkSecondary)
-				.frame(width: 78, alignment: .leading)
+		VStack(alignment: .leading, spacing: 4) {
+			HStack(spacing: 10) {
+				Text(label)
+					.font(.system(size: 12))
+					.foregroundStyle(Color.inkSecondary)
+					.frame(width: 78, alignment: .leading)
 
-			// The package's own value is the placeholder, so an untouched field
-			// shows what will be signed in without pretending it is an edit.
-			TextField(placeholder, text: text)
-				.font(.system(size: 12.5))
-				.foregroundStyle(Color.inkPrimary)
-				.textInputAutocapitalization(.never)
-				.autocorrectionDisabled()
-				.submitLabel(.done)
-				.focused($focused, equals: field)
-				.onSubmit { commit() }
+				// The package's own value is the placeholder, so an untouched field
+				// shows what will be signed in without pretending it is an edit.
+				TextField(placeholder, text: text)
+					.font(.system(size: 12.5))
+					.foregroundStyle(Color.inkPrimary)
+					.textInputAutocapitalization(.never)
+					.autocorrectionDisabled()
+					.submitLabel(.done)
+					.focused($focused, equals: field)
+					.onSubmit { commit() }
 
-			if !text.wrappedValue.isEmpty {
-				Button {
-					text.wrappedValue = ""
-					commit()
-				} label: {
-					Image(systemName: "arrow.uturn.backward")
-						.font(.system(size: 10, weight: .bold))
-						.foregroundStyle(Color.inkSecondary)
+				if !text.wrappedValue.isEmpty {
+					Button {
+						text.wrappedValue = ""
+						commit()
+					} label: {
+						Image(systemName: "arrow.uturn.backward")
+							.font(.system(size: 10, weight: .bold))
+							.foregroundStyle(Color.inkSecondary)
+					}
+					.buttonStyle(.plain)
+					.accessibilityLabel(t("sign.revertField"))
 				}
-				.buttonStyle(.plain)
 			}
+			.padding(9)
+			.background(.ultraThinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+			Text(error ?? why)
+				.font(.system(size: 10))
+				.foregroundStyle(error != nil ? Color.bad : Color.inkSecondary)
+				.fixedSize(horizontal: false, vertical: true)
+				.padding(.leading, 4)
 		}
-		.padding(9)
-		.background(.ultraThinMaterial)
-		.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 	}
 
 	// MARK: Icon
 
 	private var iconRow: some View {
-		HStack(spacing: 10) {
-			Group {
-				if let url = store.customIconURL(for: item),
-				   let image = UIImage(contentsOfFile: url.path) {
-					Image(uiImage: image)
-						.resizable()
-						.aspectRatio(contentMode: .fill)
-				} else {
-					ZStack {
-						Color.brandSoft
-						Image(systemName: "photo")
-							.font(.system(size: 13, weight: .light))
-							.foregroundStyle(Color.brand)
+		VStack(alignment: .leading, spacing: 4) {
+			HStack(spacing: 10) {
+				Group {
+					if let url = store.customIconURL(for: item),
+					   let image = UIImage(contentsOfFile: url.path) {
+						Image(uiImage: image)
+							.resizable()
+							.aspectRatio(contentMode: .fill)
+					} else {
+						ZStack {
+							Color.brandSoft
+							Image(systemName: "photo")
+								.font(.system(size: 13, weight: .light))
+								.foregroundStyle(Color.brand)
+						}
 					}
 				}
-			}
-			.frame(width: 34, height: 34)
-			.clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+				.frame(width: 34, height: 34)
+				.clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-			Text(t("sign.icon"))
-				.font(.system(size: 12))
-				.foregroundStyle(Color.inkSecondary)
+				Text(t("sign.icon"))
+					.font(.system(size: 12))
+					.foregroundStyle(Color.inkSecondary)
 
-			Spacer(minLength: 0)
+				Spacer(minLength: 0)
 
-			if draft.customIconName != nil {
-				Button {
-					store.deleteCustomIcon(for: item)
-					draft.customIconName = nil
-					commit()
-				} label: {
-					Text(t("sign.iconClear"))
-						.font(.system(size: 11, weight: .semibold))
-						.foregroundStyle(Color.inkSecondary)
+				if draft.customIconName != nil {
+					Button {
+						store.deleteCustomIcon(for: item)
+						draft.customIconName = nil
+						commit()
+					} label: {
+						Text(t("sign.iconClear"))
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(Color.inkSecondary)
+					}
+					.buttonStyle(.plain)
 				}
-				.buttonStyle(.plain)
+
+				Button {
+					pickingPhoto = true
+				} label: {
+					Text(t("sign.iconChoose"))
+						.font(.system(size: 11, weight: .semibold))
+						.foregroundStyle(Color.brand)
+						.padding(.horizontal, 11)
+						.padding(.vertical, 5)
+						.background(Capsule().fill(Color.brandSoft))
+				}
+			}
+			.padding(9)
+			.background(.ultraThinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+			.sheet(isPresented: $pickingPhoto) {
+				SystemImagePicker { data in
+					guard let data, let name = try? store.saveCustomIcon(data, for: item) else { return }
+					draft.customIconName = name
+					commit()
+				}
 			}
 
-			Button {
-				pickingPhoto = true
-			} label: {
-				Text(t("sign.iconChoose"))
-					.font(.system(size: 11, weight: .semibold))
-					.foregroundStyle(Color.brand)
-					.padding(.horizontal, 11)
-					.padding(.vertical, 5)
-					.background(Capsule().fill(Color.brandSoft))
-			}
-		}
-		.padding(9)
-		.background(.ultraThinMaterial)
-		.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-		.sheet(isPresented: $pickingPhoto) {
-			SystemImagePicker { data in
-				guard let data, let name = try? store.saveCustomIcon(data, for: item) else { return }
-				draft.customIconName = name
-				commit()
-			}
+			Text(t("sign.iconWhy"))
+				.font(.system(size: 10))
+				.foregroundStyle(Color.inkSecondary)
+				.fixedSize(horizontal: false, vertical: true)
+				.padding(.leading, 4)
 		}
 	}
 
@@ -227,6 +305,10 @@ struct SignOptionsSection: View {
 				Text(t("sign.components"))
 					.font(.system(size: 11, weight: .semibold))
 					.foregroundStyle(Color.inkSecondary)
+				Text(t("sign.componentsWhy"))
+					.font(.system(size: 10))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
 
 				if components.isEmpty {
 					Text(t("sign.noComponents"))
@@ -254,6 +336,10 @@ struct SignOptionsSection: View {
 
 	private func componentRow(_ name: String) -> some View {
 		let removed = draft.removedComponents.contains(name)
+		// The label names the tap, not the current state: a component already
+		// marked for removal reads "Keep" — what tapping it again would do —
+		// rather than repeating "Drop" back at someone who already chose that.
+		let action = String(format: t(removed ? "sign.componentKeep" : "sign.componentRemove"), name)
 
 		return Button {
 			if removed {
@@ -268,7 +354,7 @@ struct SignOptionsSection: View {
 					.font(.system(size: 15))
 					.foregroundStyle(removed ? Color.bad : Color.inkSecondary)
 
-				componentName(name, removed: removed)
+				componentLabel(action, removed: removed)
 					.lineLimit(1)
 					.truncationMode(.middle)
 
@@ -285,15 +371,15 @@ struct SignOptionsSection: View {
 	/// colour change alone — already applied above — is what marks a removed
 	/// component; the line through it is the iOS 16+ bonus.
 	@ViewBuilder
-	private func componentName(_ name: String, removed: Bool) -> some View {
-		let text = Text(name)
+	private func componentLabel(_ text: String, removed: Bool) -> some View {
+		let label = Text(text)
 			.font(.system(size: 11.5))
 			.foregroundStyle(removed ? Color.inkSecondary : Color.inkPrimary)
 
 		if #available(iOS 16, *) {
-			text.strikethrough(removed, color: Color.bad.opacity(0.7))
+			label.strikethrough(removed, color: Color.bad.opacity(0.7))
 		} else {
-			text
+			label
 		}
 	}
 
@@ -312,6 +398,16 @@ struct SignOptionsSection: View {
 		} else if SignOptions.isGeneratedDuplicate(draft.bundleIdentifier) {
 			draft.bundleIdentifier = ""
 		}
+		commit()
+	}
+
+	/// Clears every override back to how `SignOptions()` starts out, in one tap
+	/// instead of one per field.
+	private func resetAll() {
+		if draft.customIconName != nil {
+			store.deleteCustomIcon(for: item)
+		}
+		draft = SignOptions()
 		commit()
 	}
 

@@ -12,6 +12,7 @@ struct HomeView: View {
 
 	@StateObject private var probe = EngineProbe()
 	@ObservedObject private var store = CertificateStore.shared
+	@ObservedObject private var ipaStore = IPAStore.shared
 	@State private var isVisible = false
 	@State private var browsing: BrowserLink?
 	@State private var pickingLanguage = false
@@ -51,6 +52,7 @@ struct HomeView: View {
 			// and the join read as a black line ruled across the top.
 			contentBlur: pickingLanguage ? 16 : 0
 		) {
+			masthead.scrollEdgeSoftening()
 			banner.scrollEdgeSoftening()
 			certificateStatus.scrollEdgeSoftening()
 			quickActions.scrollEdgeSoftening()
@@ -72,6 +74,29 @@ struct HomeView: View {
 		.task {
 			probe.run()
 			store.reload()
+			ipaStore.reload()
+		}
+	}
+
+	// MARK: Masthead
+
+	private var appVersion: String {
+		(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"
+	}
+
+	/// One line under the screen title plus the version, spoken in full since
+	/// the pill on screen only ever shows the short "vX.Y.Z" form.
+	private var masthead: some View {
+		HStack(alignment: .top, spacing: 8) {
+			Text(t("home.heroSubtitle"))
+				.font(.system(size: 13))
+				.foregroundStyle(Color.inkSecondary)
+				.fixedSize(horizontal: false, vertical: true)
+
+			Spacer(minLength: 8)
+
+			Badge(text: "v\(appVersion)", tone: .neutral)
+				.accessibilityLabel(String(format: t("home.version"), appVersion))
 		}
 	}
 
@@ -107,13 +132,22 @@ struct HomeView: View {
 
 	// MARK: Certificate status — the screen's reason to exist
 
+	/// The whole card is one tap target rather than a chevron or a nested
+	/// button: importing lives on the Certificates tab either way, active
+	/// certificate or none, so there is only ever one place this goes.
 	@ViewBuilder
 	private var certificateStatus: some View {
-		if let cert = leadCertificate {
-			activeCertificate(cert)
-		} else {
-			noCertificate
+		Button {
+			tab = .certificates
+		} label: {
+			if let cert = leadCertificate {
+				activeCertificate(cert)
+			} else {
+				noCertificate
+			}
 		}
+		.buttonStyle(.plain)
+		.accessibilityHint(t("home.openCertificates"))
 	}
 
 	private func activeCertificate(_ cert: StoredCertificate) -> some View {
@@ -132,6 +166,11 @@ struct HomeView: View {
 			HStack(spacing: 16) {
 				CountdownRing(daysLeft: days, aura: aura)
 					.frame(width: 76, height: 76)
+					// The ring is read as "12" then "days" as two separate
+					// stops otherwise — one combined label says the same
+					// thing the sighted ring shows in a single swipe.
+					.accessibilityElement(children: .ignore)
+					.accessibilityLabel(expiryAccessibilityText(cert: cert, days: days))
 
 				VStack(alignment: .leading, spacing: 4) {
 					Text(cert.name)
@@ -174,6 +213,12 @@ struct HomeView: View {
 			if case .expiring = health {
 				inlineWarning(t("home.resignWarning"))
 			}
+			// Distinct from `.rejected`: the engine took this certificate,
+			// signing with it just stopped working the moment the date
+			// passed, and every app it already signed stopped opening too.
+			if case .expired = health {
+				inlineWarning(t("home.expiredWarning"))
+			}
 			if case .rejected(let reason) = health {
 				inlineWarning(reason)
 			}
@@ -182,7 +227,8 @@ struct HomeView: View {
 	}
 
 	/// Read-only too: importing lives in the Certificates tab, this panel only
-	/// reports what is there.
+	/// reports what is there. The one place on this screen that has to teach
+	/// rather than report, since it is the first thing a fresh install sees.
 	private var noCertificate: some View {
 		VStack(alignment: .leading, spacing: 12) {
 			HStack {
@@ -202,6 +248,20 @@ struct HomeView: View {
 						.foregroundStyle(Color.inkSecondary)
 				}
 				Spacer(minLength: 0)
+			}
+
+			Text(t("home.noCertificateWhy"))
+				.font(.system(size: 12))
+				.foregroundStyle(Color.inkSecondary)
+				.fixedSize(horizontal: false, vertical: true)
+
+			HStack(spacing: 4) {
+				Text(t("home.howToGetOne"))
+					.font(.system(size: 12, weight: .semibold))
+					.foregroundStyle(Color.brand)
+				Image(systemName: "chevron.right")
+					.font(.system(size: 10, weight: .bold))
+					.foregroundStyle(Color.brand)
 			}
 		}
 		.statusCard(glow: .inkSecondary)
@@ -232,10 +292,20 @@ struct HomeView: View {
 				columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
 				spacing: 10
 			) {
-				action(icon: "doc.zipper", title: t("quick.ipa"),   detail: t("quick.ipaDetail"))   { tab = .ipa }
-				action(icon: "shield",     title: t("quick.certs"), detail: t("quick.certsDetail")) { tab = .certificates }
-				action(icon: "cube",       title: t("quick.apps"),  detail: t("quick.appsDetail"))  { tab = .apps }
-				action(icon: "book",       title: t("quick.guides"), detail: t("quick.guidesDetail")) { tab = .guide }
+				// A count rather than a slogan wherever there is something to
+				// count, so a tile says what is behind it instead of
+				// describing it. Apps and Guides have nothing to count, so
+				// they keep their line.
+				action(
+					icon: "doc.zipper", title: t("quick.ipa"),
+					detail: pluralized(ipaStore.packages.count, one: "home.onePackage", many: "home.packages")
+				) { tab = .ipa }
+				action(
+					icon: "shield", title: t("quick.certs"),
+					detail: pluralized(store.certificates.count, one: "home.oneIdentity", many: "home.identities")
+				) { tab = .certificates }
+				action(icon: "cube",  title: t("quick.apps"),   detail: t("quick.appsDetail"))   { tab = .apps }
+				action(icon: "book",  title: t("quick.guides"), detail: t("quick.guidesDetail")) { tab = .guide }
 			}
 		}
 	}
@@ -396,6 +466,20 @@ struct HomeView: View {
 	}
 
 	// MARK: Helpers
+
+	private func pluralized(_ count: Int, one: String, many: String) -> String {
+		String(format: t(count == 1 ? one : many), count)
+	}
+
+	/// Spoken form of the countdown ring. "No date" covers the one case a
+	/// forward countdown cannot describe honestly — nothing for the engine to
+	/// count down from — rather than reading "Expires in 0 days" for a
+	/// certificate that never had a date at all.
+	private func expiryAccessibilityText(cert: StoredCertificate, days: Int) -> String {
+		guard cert.expiresAt != nil else { return t("home.noExpiry") }
+		let unit = days == 1 ? t("home.day") : t("home.days")
+		return String(format: t("home.a11yExpiry"), "\(days) \(unit)")
+	}
 
 	private func daysLeft(_ health: StoredCertificate.Health) -> Int {
 		switch health {

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// The subset of an app the detail page needs, so both feed apps and pinned
 /// ones can share the screen.
@@ -32,6 +33,21 @@ struct AppDetail: Identifiable {
 	let downloadURL: URL?
 	let fileName: String
 
+	/// True only when `id` really is the package's bundle identifier. A feed
+	/// app's `id` is exactly that; a featured app's is a short slug picked
+	/// for this app's own row, and offering to copy it as a "bundle ID"
+	/// would hand out something that is not one.
+	var showsBundleID: Bool = false
+
+	/// One entry per version the repository still lists, newest first.
+	struct HistoryEntry {
+		let version: String
+		let size: String?
+	}
+	/// Only ever populated from a feed — a featured app carries a single
+	/// version and has nothing to list a history of.
+	var history: [HistoryEntry] = []
+
 	init(_ app: SourceApp) {
 		id = app.bundleIdentifier
 		name = app.name
@@ -47,6 +63,13 @@ struct AppDetail: Identifiable {
 		badges = []
 		downloadURL = app.downloadLink
 		fileName = app.suggestedFileName
+		showsBundleID = true
+		history = (app.versions ?? []).compactMap { entry in
+			guard let version = entry.version?.trimmingCharacters(in: .whitespacesAndNewlines),
+				  !version.isEmpty
+			else { return nil }
+			return HistoryEntry(version: version, size: Self.displaySize(entry.size))
+		}
 	}
 
 	init(_ app: FeaturedApp) {
@@ -68,6 +91,16 @@ struct AppDetail: Identifiable {
 		downloadURL = app.downloadURL
 		fileName = app.downloadURL.lastPathComponent
 	}
+
+	/// Mirrors `SourceApp.displaySize`, for one entry in `versions` rather
+	/// than the app as a whole.
+	private static func displaySize(_ bytes: Int64?) -> String? {
+		guard let bytes, bytes > 0 else { return nil }
+		let f = ByteCountFormatter()
+		f.countStyle = .file
+		f.allowedUnits = [.useMB, .useGB]
+		return f.string(fromByteCount: bytes)
+	}
 }
 
 struct AppDetailSheet: View {
@@ -78,6 +111,12 @@ struct AppDetailSheet: View {
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
 	@ObservedObject private var localizer = Localizer.shared
+	@ObservedObject private var downloader = Downloader.shared
+	@ObservedObject private var ipaStore = IPAStore.shared
+
+	@State private var descriptionExpanded = false
+	@State private var copiedID = false
+	@State private var expandedScreenshot: URL?
 
 	var body: some View {
 		ZStack {
@@ -108,6 +147,40 @@ struct AppDetailSheet: View {
 		// Only the bottom. The top still respects the safe area, so the panel
 		// keeps clear of the Dynamic Island exactly as before.
 		.ignoresSafeArea(edges: .bottom)
+		.fullScreenCover(
+			isPresented: Binding(
+				get: { expandedScreenshot != nil },
+				set: { if !$0 { expandedScreenshot = nil } }
+			)
+		) {
+			if let url = expandedScreenshot {
+				ScreenshotViewer(url: url) { expandedScreenshot = nil }
+			}
+		}
+	}
+
+	// MARK: Get status
+
+	private var downloadProgress: Double? { downloader.progress[detail.id] }
+
+	/// Mirrors `GetButton`'s own matching rules so the note beneath it never
+	/// disagrees with what the button itself is showing.
+	private var imported: ImportedIPA? {
+		if let match = ipaStore.packages.first(where: { $0.sourceID == detail.id }) { return match }
+		let bundledName = detail.bundledFile.map { "\($0).ipa" }
+		return ipaStore.packages.first {
+			$0.sourceID == nil && ($0.fileName == detail.fileName || $0.fileName == bundledName)
+		}
+	}
+
+	/// What the note beneath Get says, given where this package actually
+	/// stands. The button only has room to answer "what do I do" — this is
+	/// "what already happened", which on this screen there is room to say.
+	private var statusNoteText: String {
+		if downloadProgress != nil { return t("detail.downloading") }
+		if let imported { return imported.isSigned ? t("detail.onShelfSigned") : t("detail.onShelf") }
+		if detail.downloadURL == nil && detail.bundledFile == nil { return t("detail.noDownload") }
+		return t("detail.getNote")
 	}
 
 	private var panel: some View {
@@ -116,9 +189,11 @@ struct AppDetailSheet: View {
 				VStack(alignment: .leading, spacing: 18) {
 					hero
 					facts
+					bundleIDRow
 					if !detail.screenshots.isEmpty { screenshots }
-					if let description = detail.description { section(t("apps.about"), body: description) }
+					aboutSection
 					if let notes = detail.releaseNotes { section(t("apps.whatsNew"), body: notes) }
+					history
 				}
 				.padding(.horizontal, 18)
 				.padding(.top, 22)
@@ -250,6 +325,12 @@ struct AppDetailSheet: View {
 						bundledFile: detail.bundledFile
 					)
 					.padding(.top, 2)
+
+					Text(statusNoteText)
+						.font(.system(size: 11))
+						.foregroundStyle(Color.inkSecondary)
+						.fixedSize(horizontal: false, vertical: true)
+						.padding(.top, 2)
 				}
 			}
 
@@ -295,6 +376,35 @@ struct AppDetailSheet: View {
 			.frame(width: 1, height: 26)
 	}
 
+	// MARK: Bundle ID
+
+	@ViewBuilder
+	private var bundleIDRow: some View {
+		if detail.showsBundleID {
+			Button {
+				UIPasteboard.general.string = detail.id
+				Haptics.tap()
+				withAnimation(.easeInOut(duration: 0.15)) { copiedID = true }
+				DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+					withAnimation(.easeInOut(duration: 0.15)) { copiedID = false }
+				}
+			} label: {
+				HStack(spacing: 5) {
+					Image(systemName: copiedID ? "checkmark" : "doc.on.doc")
+						.font(.system(size: 10, weight: .semibold))
+					Text(copiedID ? t("detail.copied") : detail.id)
+						.font(.system(size: 11, weight: .medium))
+						.lineLimit(1)
+						.truncationMode(.middle)
+				}
+				.foregroundStyle(Color.inkSecondary)
+			}
+			.buttonStyle(.plain)
+			.frame(maxWidth: .infinity, alignment: .center)
+			.accessibilityLabel(t("detail.copyID"))
+		}
+	}
+
 	// MARK: Screenshots
 
 	private var screenshots: some View {
@@ -302,33 +412,27 @@ struct AppDetailSheet: View {
 			heading(t("apps.preview"))
 			ScrollView(.horizontal, showsIndicators: false) {
 				HStack(spacing: 10) {
-					ForEach(detail.screenshots, id: \.absoluteString) { url in
+					ForEach(Array(detail.screenshots.enumerated()), id: \.offset) { index, url in
 						// Height is fixed, width follows each image's own shape:
 						// feeds mix portrait and landscape captures, and forcing
 						// one frame on both crops or turns them.
-						//
-						// Through the cache rather than `AsyncImage`, which keeps
-						// nothing: every open of this sheet re-fetched every
-						// screenshot, and they are far heavier than the icons the
-						// cache was built for. Asked for at 1024 px rather than
-						// the icon default, since they are shown many times larger.
-						CachedImage(
-							url: url,
-							maximumPixels: ImageCache.screenshotPixels,
-							contentMode: .fit
-						) {
-							ZStack {
-								Color.inkSecondary.opacity(0.10)
-								ProgressView()
-							}
-							.frame(width: 140)
+						Button {
+							Haptics.tap()
+							expandedScreenshot = url
+						} label: {
+							ScreenshotThumbnail(url: url)
+								.frame(height: 260)
+								.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+								.overlay(
+									RoundedRectangle(cornerRadius: 14, style: .continuous)
+										.strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+								)
 						}
-						.frame(height: 260)
-						.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-						.overlay(
-							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+						.buttonStyle(.plain)
+						.accessibilityLabel(
+							String(format: t("detail.shot"), index + 1, detail.screenshots.count)
 						)
+						.accessibilityHint(t("detail.viewShot"))
 					}
 				}
 			}
@@ -339,6 +443,41 @@ struct AppDetailSheet: View {
 	}
 
 	// MARK: Text sections
+
+	/// Description only — release notes go through `section(_:body:)` below
+	/// unchanged, since neither the empty state nor the read-more toggle
+	/// belongs on those.
+	private var aboutSection: some View {
+		VStack(alignment: .leading, spacing: 7) {
+			heading(t("apps.about"))
+			if let description = detail.description,
+			   !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+				Text(description)
+					.font(.system(size: 13))
+					.foregroundStyle(Color.inkSecondary)
+					.lineSpacing(3)
+					.lineLimit(descriptionExpanded ? nil : 6)
+					.fixedSize(horizontal: false, vertical: true)
+				// Short feed descriptions never actually reach six lines, so the
+				// toggle only appears once there is something left to reveal.
+				if description.count > 260 {
+					Button {
+						withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
+					} label: {
+						Text(descriptionExpanded ? t("detail.readLess") : t("detail.readMore"))
+							.font(.system(size: 12, weight: .semibold))
+							.foregroundStyle(Color.brand)
+					}
+					.buttonStyle(.plain)
+				}
+			} else {
+				Text(t("detail.noInfo"))
+					.font(.system(size: 13))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+		}
+	}
 
 	private func section(_ title: String, body text: String) -> some View {
 		VStack(alignment: .leading, spacing: 7) {
@@ -355,5 +494,126 @@ struct AppDetailSheet: View {
 		Text(text)
 			.font(.system(size: 16, weight: .semibold))
 			.foregroundStyle(Color.inkPrimary)
+	}
+
+	// MARK: Version history
+
+	@ViewBuilder
+	private var history: some View {
+		// A single entry is just the current version restated, not a history.
+		if detail.history.count > 1 {
+			VStack(alignment: .leading, spacing: 8) {
+				heading(t("detail.history"))
+				VStack(spacing: 6) {
+					ForEach(Array(detail.history.enumerated()), id: \.offset) { index, entry in
+						HStack(spacing: 8) {
+							Text(entry.version)
+								.font(.system(size: 12, weight: .semibold))
+								.foregroundStyle(Color.inkPrimary)
+								.lineLimit(1)
+							if index == 0 {
+								Badge(text: t("detail.latest"), tone: .brand)
+							}
+							Spacer(minLength: 8)
+							if let size = entry.size {
+								Text(size)
+									.font(.system(size: 11))
+									.foregroundStyle(Color.inkSecondary)
+							}
+						}
+						.padding(.vertical, 8)
+						.padding(.horizontal, 10)
+						.background(.ultraThinMaterial)
+						.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+					}
+				}
+				Text(t("detail.historyNote"))
+					.font(.system(size: 10))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+		}
+	}
+}
+
+// MARK: - Screenshot cell
+
+/// `CachedImage`'s placeholder cannot tell "still loading" from "gave up
+/// entirely" — every caller until now only ever showed a spinner either way.
+/// A feed screenshot is exactly the case that needs the difference: a dead
+/// link buried among working ones should say so, not spin forever next to its
+/// neighbours. Kept local rather than changing `CachedImage` itself, which
+/// other screens rely on behaving exactly as it does today.
+private struct ScreenshotThumbnail: View {
+	let url: URL
+
+	@State private var image: UIImage?
+	@State private var failed = false
+
+	var body: some View {
+		Group {
+			if let image {
+				Image(uiImage: image)
+					.resizable()
+					.aspectRatio(contentMode: .fit)
+			} else if failed {
+				ZStack {
+					Color.inkSecondary.opacity(0.10)
+					VStack(spacing: 6) {
+						Image(systemName: "exclamationmark.triangle")
+							.font(.system(size: 18, weight: .light))
+							.foregroundStyle(Color.inkSecondary)
+						Text(t("detail.shotFailed"))
+							.font(.system(size: 10))
+							.foregroundStyle(Color.inkSecondary)
+					}
+				}
+				.frame(width: 140)
+			} else {
+				ZStack {
+					Color.inkSecondary.opacity(0.10)
+					ProgressView()
+				}
+				.frame(width: 140)
+			}
+		}
+		.task(id: url) {
+			guard image == nil, !failed else { return }
+			if let result = await ImageCache.shared.image(for: url, maximumPixels: ImageCache.screenshotPixels) {
+				image = result
+			} else {
+				failed = true
+			}
+		}
+	}
+}
+
+// MARK: - Full-size viewer
+
+private struct ScreenshotViewer: View {
+	let url: URL
+	var onClose: () -> Void
+
+	var body: some View {
+		ZStack {
+			Color.black.ignoresSafeArea()
+
+			CachedImage(url: url, maximumPixels: ImageCache.screenshotPixels, contentMode: .fit) {
+				ProgressView().tint(.white)
+			}
+			.padding(24)
+
+			Button(action: onClose) {
+				Image(systemName: "xmark")
+					.font(.system(size: 13, weight: .bold))
+					.foregroundStyle(.white)
+					.glassCircle(size: 34)
+			}
+			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+			.padding(.top, 14)
+			.padding(.trailing, 14)
+		}
+		.contentShape(Rectangle())
+		.onTapGesture(perform: onClose)
 	}
 }

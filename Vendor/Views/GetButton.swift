@@ -22,6 +22,7 @@ struct GetButton: View {
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
 	@ObservedObject private var localizer = Localizer.shared
+	@State private var showingWhy = false
 
 	private var progress: Double? { downloader.progress[id] }
 	private var failure: String? { downloader.failures[id] }
@@ -47,18 +48,15 @@ struct GetButton: View {
 				ring(progress)
 			} else if let imported {
 				installButton(imported)
+			} else if failure != nil {
+				retryButton
 			} else {
 				button
 			}
 		}
 		.animation(.easeInOut(duration: 0.2), value: progress == nil)
 		.animation(.easeInOut(duration: 0.2), value: imported?.id)
-		// A download that dies silently looks like a button that does nothing.
-		.alert(t("apps.downloadFailed"), isPresented: .constant(failure != nil)) {
-			Button(t("task.doneButton")) { downloader.clearFailure(id) }
-		} message: {
-			Text(failure ?? "")
-		}
+		.animation(.easeInOut(duration: 0.2), value: failure != nil)
 	}
 
 	private var button: some View {
@@ -79,6 +77,42 @@ struct GetButton: View {
 		}
 		.disabled(downloadURL == nil && bundledFile == nil)
 		.opacity(downloadURL == nil && bundledFile == nil ? 0.4 : 1)
+	}
+
+	/// A dead download used to throw an alert over whatever the user was
+	/// scrolling past the moment it failed. The pill says it in one word;
+	/// the reason is a tap on the glyph beside it away instead.
+	private var retryButton: some View {
+		HStack(spacing: 6) {
+			Button(action: retry) {
+				Text(t("apps.retry"))
+					.font(.system(size: 13, weight: .bold))
+					.foregroundStyle(.white)
+					.padding(.horizontal, 16)
+					.padding(.vertical, 7)
+					.background(Capsule().fill(Color.warn))
+			}
+
+			Button { showingWhy = true } label: {
+				Image(systemName: "exclamationmark.circle")
+					.font(.system(size: 15))
+					.foregroundStyle(Color.warn)
+			}
+			.accessibilityLabel(t("apps.downloadFailedHint"))
+		}
+		.alert(t("apps.downloadFailed"), isPresented: $showingWhy) {
+			Button(t("task.doneButton")) { downloader.clearFailure(id) }
+		} message: {
+			Text(failure ?? "")
+		}
+	}
+
+	private func retry() {
+		if let bundledFile {
+			downloader.adopt(id: id, bundledResource: bundledFile)
+		} else if let downloadURL {
+			downloader.fetch(id: id, from: downloadURL, named: fileName)
+		}
 	}
 
 	/// Shown once the package is on the shelf. It hands off to the IPA tab with

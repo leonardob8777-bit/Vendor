@@ -8,6 +8,12 @@ import SwiftUI
 struct CertificatesView: View {
 	@ObservedObject private var store = CertificateStore.shared
 	@State private var isImporting = false
+	/// Certificate a row was tapped for; drives the detail sheet.
+	@State private var selected: StoredCertificate?
+	/// Certificate the delete confirmation is asking about — set from inside
+	/// the detail sheet, not by the swipe, which already commits on its own.
+	@State private var confirmingDelete: StoredCertificate?
+	@State private var showingGuide = false
 	/// Not read directly — its presence keeps this view subscribed to
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
@@ -25,11 +31,28 @@ struct CertificatesView: View {
 		}
 	}
 
+	/// The identity Home is currently signing with — same rule as
+	/// `HomeView.leadCertificate`, minus its fallback to the most recent
+	/// import. That fallback exists so Home never shows a blank panel to
+	/// someone who owns a rejected certificate; here it would mislabel a dead
+	/// certificate "Main" when nothing is actually leading with it.
+	private var leadCertificate: StoredCertificate? {
+		store.certificates
+			.filter(\.canSignNow)
+			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
+			.first
+	}
+
+	/// Whether any floating window is up — every one of them blurs the list
+	/// and hides the tab bar the same way, so they share one flag instead of
+	/// each overlay computing its own version of the same condition.
+	private var isPresenting: Bool { isImporting || selected != nil || showingGuide }
+
 	var body: some View {
 		Screen(
 			t("tab.certificates"),
 			toolbar: AnyView(addButton),
-			contentBlur: isImporting ? 16 : 0
+			contentBlur: isPresenting ? 16 : 0
 		) {
 			if store.certificates.isEmpty {
 				emptyState
@@ -59,7 +82,7 @@ struct CertificatesView: View {
 		//
 		// Two `.animation` modifiers, and both are needed. This one sits before
 		// the overlay, so it reaches the screen underneath and carries the blur.
-		.animation(.easeInOut(duration: 0.25), value: isImporting)
+		.animation(.easeInOut(duration: 0.25), value: isPresenting)
 		.overlay {
 			if isImporting {
 				NewCertificateView {
@@ -69,14 +92,51 @@ struct CertificatesView: View {
 				.transition(.opacity)
 			}
 		}
-		// And this one sits after it, so it reaches the overlay and carries the
-		// panel's fade. Without it the transition has nothing driving it: the
-		// panel arrived in a single frame while the blur took a quarter of a
-		// second behind it, and the two read as unrelated.
-		.animation(.easeInOut(duration: 0.25), value: isImporting)
+		.overlay {
+			if let cert = selected {
+				CertificateDetailSheet(
+					certificate: cert,
+					isLead: cert.id == leadCertificate?.id,
+					mood: mood(for: cert),
+					tint: tint(for: cert),
+					onDelete: { confirmingDelete = cert },
+					dismiss: { selected = nil }
+				)
+				.transition(.opacity)
+			}
+		}
+		.overlay {
+			if showingGuide {
+				GuideDetailSheet(guide: GuideContent.certificate) { showingGuide = false }
+					.transition(.opacity)
+			}
+		}
+		// And this one sits after them, so it reaches the overlays and carries
+		// their fade. Without it the transition has nothing driving it: a panel
+		// arrived in a single frame while the blur took a quarter of a second
+		// behind it, and the two read as unrelated.
+		.animation(.easeInOut(duration: 0.25), value: isPresenting)
+		// A dialog rather than one of this app's own floating panels — the
+		// system's own affordance for a destructive answer, same as IPA's.
+		.confirmationDialog(
+			t("certs.deleteConfirm"),
+			isPresented: Binding(
+				get: { confirmingDelete != nil },
+				set: { if !$0 { confirmingDelete = nil } }
+			),
+			titleVisibility: .visible,
+			presenting: confirmingDelete
+		) { cert in
+			Button(t("common.delete"), role: .destructive) {
+				store.delete(cert)
+				if selected?.id == cert.id { selected = nil }
+			}
+		} message: { _ in
+			Text(t("certs.deleteConfirmDetail"))
+		}
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content.
-		.tabBarVisibility(!isImporting)
+		.tabBarVisibility(!isPresenting)
 		.onAppear { store.reload() }
 	}
 
@@ -96,26 +156,42 @@ struct CertificatesView: View {
 	// MARK: Row
 
 	private func row(for item: StoredCertificate) -> some View {
-		HStack(spacing: 12) {
-			FaceGlyph(mood: mood(for: item), tint: tint(for: item), size: 44)
+		Button {
+			Haptics.tap()
+			selected = item
+		} label: {
+			HStack(spacing: 12) {
+				FaceGlyph(mood: mood(for: item), tint: tint(for: item), size: 44)
 
-			VStack(alignment: .leading, spacing: 3) {
-				Text(item.name)
-					.font(.system(size: 15, weight: .semibold))
-					.foregroundStyle(Color.inkPrimary)
-					.lineLimit(1)
-				Text(item.issuer ?? t("certs.unknownTeam"))
-					.font(.system(size: 12))
-					.foregroundStyle(Color.inkSecondary)
-					.lineLimit(1)
-				stateLabel(for: item)
+				VStack(alignment: .leading, spacing: 3) {
+					HStack(spacing: 6) {
+						Text(item.name)
+							.font(.system(size: 15, weight: .semibold))
+							.foregroundStyle(Color.inkPrimary)
+							.lineLimit(1)
+						// The certificate Home actually signs with — see
+						// `leadCertificate`. Nothing else on this row says
+						// so, and the badge alone doesn't explain why; the
+						// detail sheet this opens does.
+						if item.id == leadCertificate?.id {
+							Badge(text: t("certs.lead"), tone: .brand)
+						}
+					}
+					Text(item.issuer ?? t("certs.unknownTeam"))
+						.font(.system(size: 12))
+						.foregroundStyle(Color.inkSecondary)
+						.lineLimit(1)
+					stateLabel(for: item)
+				}
+
+				Spacer(minLength: 8)
+
+				expiryBlock(for: item)
 			}
-
-			Spacer(minLength: 8)
-
-			expiryBlock(for: item)
+			.statusCard(padding: 11, aura: CertificateAura(item))
 		}
-		.statusCard(padding: 11, aura: CertificateAura(item))
+		.buttonStyle(.plain)
+		.accessibilityHint(t("certs.details"))
 	}
 
 	@ViewBuilder
@@ -197,15 +273,42 @@ struct CertificatesView: View {
 	// MARK: Empty
 
 	private var emptyState: some View {
-		VStack(spacing: 10) {
-			GlyphTile(systemName: "shield", size: 54)
-			Text(t("certs.empty"))
-				.font(.system(size: 17, weight: .semibold))
-				.foregroundStyle(Color.inkPrimary)
-			Text(t("certs.emptyDetail"))
-				.font(.system(size: 13))
-				.foregroundStyle(Color.inkSecondary)
-				.multilineTextAlignment(.center)
+		VStack(spacing: 14) {
+			VStack(spacing: 10) {
+				GlyphTile(systemName: "shield", size: 54)
+				Text(t("certs.empty"))
+					.font(.system(size: 17, weight: .semibold))
+					.foregroundStyle(Color.inkPrimary)
+				Text(t("certs.emptyDetail"))
+					.font(.system(size: 13))
+					.foregroundStyle(Color.inkSecondary)
+					.multilineTextAlignment(.center)
+			}
+
+			// Nobody can use a single thing in the app from here, so the
+			// route matters more than the fact that the list is empty —
+			// three sentences, in the order they actually happen.
+			VStack(alignment: .leading, spacing: 10) {
+				emptyStep(1, t("certs.emptyStep1"))
+				emptyStep(2, t("certs.emptyStep2"))
+				emptyStep(3, t("certs.emptyStep3"))
+			}
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.padding(14)
+			.background(.ultraThinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+			HStack(alignment: .top, spacing: 10) {
+				Image(systemName: "gift")
+					.font(.system(size: 14, weight: .semibold))
+					.foregroundStyle(Color.brand)
+				Text(t("certs.emptyFree"))
+					.font(.system(size: 12))
+					.foregroundStyle(Color.inkSecondary)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+			.frame(maxWidth: .infinity, alignment: .leading)
+
 			Button { isImporting = true } label: {
 				Text(t("home.importCertificate"))
 					.font(.system(size: 14, weight: .semibold))
@@ -214,10 +317,34 @@ struct CertificatesView: View {
 					.padding(.vertical, 10)
 					.background(Capsule().fill(LinearGradient.brand))
 			}
-			.padding(.top, 4)
+			.padding(.top, 2)
+
+			Button { showingGuide = true } label: {
+				Text(t("certs.emptyGuide"))
+					.font(.system(size: 13, weight: .semibold))
+					.foregroundStyle(Color.brand)
+			}
 		}
 		.frame(maxWidth: .infinity)
-		.padding(.vertical, 34)
+		.padding(.vertical, 28)
+		.padding(.horizontal, 20)
 		.card()
+	}
+
+	private func emptyStep(_ number: Int, _ text: String) -> some View {
+		HStack(alignment: .top, spacing: 10) {
+			Text("\(number)")
+				.font(.system(size: 11, weight: .bold))
+				.foregroundStyle(.white)
+				.frame(width: 20, height: 20)
+				.background(Circle().fill(LinearGradient.actionFlow))
+
+			Text(text)
+				.font(.system(size: 13))
+				.foregroundStyle(Color.inkPrimary)
+				.fixedSize(horizontal: false, vertical: true)
+
+			Spacer(minLength: 0)
+		}
 	}
 }

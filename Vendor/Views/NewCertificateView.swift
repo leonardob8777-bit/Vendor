@@ -32,14 +32,22 @@ struct NewCertificateView: View {
 
 	@State private var isSaving = false
 	@State private var failure: String?
+	/// Whether the discard dialog is up. Tapping away or the X asks first
+	/// once there is anything picked or typed — see `requestDismiss`.
+	@State private var confirmingDiscard = false
 	/// Not read directly — its presence keeps this view subscribed to
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
 	@ObservedObject private var localizer = Localizer.shared
 
-	private var canSave: Bool {
-		certificateFile != nil && provisioningFile != nil && !isSaving
+	/// Both files picked, independent of whether a save is in flight — the
+	/// badge on step 1 reads this, and shouldn't flip back to "still needed"
+	/// the moment Save is tapped.
+	private var filesReady: Bool {
+		certificateFile != nil && provisioningFile != nil
 	}
+
+	private var canSave: Bool { filesReady && !isSaving }
 
 	var body: some View {
 		ZStack {
@@ -49,7 +57,7 @@ struct NewCertificateView: View {
 			Color.clear
 				.ignoresSafeArea()
 				.contentShape(Rectangle())
-				.onTapGesture { if canLeaveByTappingAway { dismiss() } }
+				.onTapGesture(perform: requestDismiss)
 
 			panel
 				.padding(.horizontal, 26)
@@ -59,16 +67,39 @@ struct NewCertificateView: View {
 		// opening, and a panel measured against it settles downwards after it
 		// appears. See `AppDetailSheet`.
 		.ignoresSafeArea(edges: .bottom)
+		// A dialog rather than one of this app's own floating panels, for the
+		// same reason `IPAView` reaches for one over its delete: it is the
+		// system's own affordance for a destructive answer.
+		.confirmationDialog(
+			t("certs.discardTitle"),
+			isPresented: $confirmingDiscard,
+			titleVisibility: .visible
+		) {
+			Button(t("certs.discard"), role: .destructive, action: dismiss)
+		} message: {
+			Text(t("certs.discardDetail"))
+		}
 	}
 
-	/// Tapping away closes it, unless that would throw work away.
+	/// Tapping away or the X closes it outright, unless that would throw work
+	/// away — then it asks first instead of doing nothing.
 	///
-	/// The other floating windows have nothing to lose, so they always close.
-	/// This one holds two picked files and a typed password, and losing those to
-	/// a stray tap is worse than having to reach for the close button.
+	/// The X used to dismiss unconditionally regardless of what was picked or
+	/// typed, while tapping the background right beside it silently swallowed
+	/// the same tap whenever there was anything to lose. Two controls for the
+	/// same action disagreeing about what it does reads as one of them being
+	/// broken; now both go through this.
+	private func requestDismiss() {
+		guard !isSaving else { return }
+		if canLeaveByTappingAway {
+			dismiss()
+		} else {
+			confirmingDiscard = true
+		}
+	}
+
 	private var canLeaveByTappingAway: Bool {
-		!isSaving
-			&& certificateFile == nil
+		certificateFile == nil
 			&& provisioningFile == nil
 			&& password.isEmpty
 			&& nickname.isEmpty
@@ -192,7 +223,7 @@ struct NewCertificateView: View {
 	// MARK: Chrome
 
 	private var closeButton: some View {
-		Button(action: dismiss) {
+		Button(action: requestDismiss) {
 			Image(systemName: "xmark")
 				.font(.system(size: 13, weight: .bold))
 				.foregroundStyle(Color.inkPrimary)
@@ -254,7 +285,15 @@ struct NewCertificateView: View {
 
 	private var requiredFiles: some View {
 		VStack(alignment: .leading, spacing: 12) {
-			stepHeader(index: "1.", title: t("certs.stepFiles"))
+			stepHeader(
+				index: "1.", title: t("certs.stepFiles"),
+				trailing: filesReady ? t("certs.readyTitle") : t("certs.missingTitle"),
+				trailingTone: filesReady ? .ok : .warn
+			)
+
+			Text(t("certs.inside"))
+				.font(.system(size: 11, weight: .medium))
+				.foregroundStyle(Color.inkSecondary)
 
 			HStack(alignment: .top, spacing: 12) {
 				timeline
@@ -361,6 +400,7 @@ struct NewCertificateView: View {
 							.font(.system(size: 15))
 							.foregroundStyle(Color.inkSecondary)
 					}
+					.accessibilityLabel(revealPassword ? t("certs.hidePassword") : t("certs.showPassword"))
 				}
 			}
 
@@ -370,15 +410,29 @@ struct NewCertificateView: View {
 					.foregroundStyle(Color.inkPrimary)
 					.autocorrectionDisabled()
 			}
+			Text(t("certs.nicknameHint"))
+				.font(.system(size: 11))
+				.foregroundStyle(Color.inkSecondary)
+				.padding(.leading, 4)
 
 			HStack(alignment: .top, spacing: 10) {
 				Image(systemName: "info.circle")
 					.font(.system(size: 15))
 					.foregroundStyle(Color.brand)
-				Text(t("certs.passwordHint"))
-					.font(.system(size: 12))
-					.foregroundStyle(Color.inkSecondary)
-					.fixedSize(horizontal: false, vertical: true)
+				VStack(alignment: .leading, spacing: 6) {
+					Text(t("certs.passwordHint"))
+						.font(.system(size: 12))
+						.foregroundStyle(Color.inkSecondary)
+						.fixedSize(horizontal: false, vertical: true)
+					// Where it came from, not just what to do with it — the
+					// operational note above says nothing about where it ends
+					// up, and "somewhere I typed a password into" is the part
+					// worth a sentence of its own.
+					Text(t("certs.passwordSource"))
+						.font(.system(size: 11))
+						.foregroundStyle(Color.inkSecondary.opacity(0.85))
+						.fixedSize(horizontal: false, vertical: true)
+				}
 			}
 			.padding(12)
 			.frame(maxWidth: .infinity, alignment: .leading)
@@ -416,7 +470,10 @@ struct NewCertificateView: View {
 		.clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 	}
 
-	private func stepHeader(index: String, title: String) -> some View {
+	private func stepHeader(
+		index: String, title: String,
+		trailing: String? = nil, trailingTone: Badge.Tone = .neutral
+	) -> some View {
 		HStack(spacing: 8) {
 			Circle().fill(Color.mint).frame(width: 9, height: 9)
 			Text(index)
@@ -426,6 +483,9 @@ struct NewCertificateView: View {
 				.font(.system(size: 15, weight: .bold))
 				.foregroundStyle(Color.inkPrimary)
 			Spacer(minLength: 0)
+			if let trailing {
+				Badge(text: trailing, tone: trailingTone)
+			}
 		}
 	}
 }
