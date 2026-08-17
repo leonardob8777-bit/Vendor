@@ -16,6 +16,7 @@ struct HomeView: View {
 	@State private var isVisible = false
 	@State private var browsing: BrowserLink?
 	@State private var pickingLanguage = false
+	@State private var showingSettings = false
 	/// Not read directly — its presence keeps this view subscribed to
 	/// `Localizer.shared`, so every `t(...)` call below redraws when the
 	/// language flips.
@@ -45,12 +46,12 @@ struct HomeView: View {
 	var body: some View {
 		Screen(
 			t("tab.home"),
-			toolbar: AnyView(LanguageButton(isPresented: $pickingLanguage)),
+			toolbar: AnyView(toolbarButtons),
 			// Through `Screen` rather than a `.blur` on the whole thing: the
 			// aurora ignores the safe area, so blurring the screen as a whole
 			// left the strip beside the Dynamic Island outside the blurred layer
 			// and the join read as a black line ruled across the top.
-			contentBlur: pickingLanguage ? 16 : 0
+			contentBlur: pickingLanguage || showingSettings ? 16 : 0
 		) {
 			masthead.scrollEdgeSoftening()
 			banner.scrollEdgeSoftening()
@@ -67,14 +68,40 @@ struct HomeView: View {
 			}
 		}
 		.animation(.easeInOut(duration: 0.25), value: pickingLanguage)
+		.overlay {
+			if showingSettings {
+				SettingsView { showingSettings = false }
+					.transition(.opacity)
+			}
+		}
+		.animation(.easeInOut(duration: 0.25), value: showingSettings)
 		// The tab bar is the TabView's, so it draws above anything a tab lays
 		// over its own content — sharp chrome on top of a floating panel.
-		.tabBarVisibility(!pickingLanguage)
+		.tabBarVisibility(!pickingLanguage && !showingSettings)
 		.inAppBrowser($browsing)
 		.task {
 			probe.run()
 			store.reload()
 			ipaStore.reload()
+		}
+	}
+
+	// MARK: Chrome
+
+	private var toolbarButtons: some View {
+		HStack(spacing: 8) {
+			Button {
+				Haptics.tap()
+				showingSettings = true
+			} label: {
+				Image(systemName: "gearshape")
+					.font(.system(size: 15, weight: .semibold))
+					.foregroundStyle(Color.inkPrimary)
+					.glassCircle(size: 34)
+			}
+			.accessibilityLabel(t("settings.title"))
+
+			LanguageButton(isPresented: $pickingLanguage)
 		}
 	}
 

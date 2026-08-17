@@ -192,5 +192,36 @@ extension Strings {
 		),
 		"sign.componentRemove": (en: "Drop %@", es: "Quitar %@"),
 		"sign.componentKeep":   (en: "Keep %@", es: "Conservar %@"),
+
+		// MARK: Re-signing after a certificate change
+
+		"ipa.resignAllA11yOne": (
+			en: "Re-sign 1 package with the active certificate",
+			es: "Volver a firmar 1 paquete con el certificado activo"
+		),
+		"ipa.resignAllA11yMany": (
+			en: "Re-sign %d packages with the active certificate",
+			es: "Volver a firmar %d paquetes con el certificado activo"
+		),
+		"ipa.resignAllTitleOne": (en: "Re-sign this package?", es: "¿Volver a firmar este paquete?"),
+		"ipa.resignAllTitleMany": (en: "Re-sign %d packages?", es: "¿Volver a firmar %d paquetes?"),
+		"ipa.resignAllDetailOne": (
+			en: "It was signed with a certificate that isn't active anymore. It will be re-signed and reinstalled with %@ instead.",
+			es: "Se firmó con un certificado que ya no está activo. Se volverá a firmar y a instalar con %@."
+		),
+		"ipa.resignAllDetailMany": (
+			en: "They were signed with a certificate that isn't active anymore. All %d will be re-signed and reinstalled with %@ — packages sign one at a time, so this can take a while.",
+			es: "Se firmaron con un certificado que ya no está activo. Los %d se volverán a firmar e instalar con %@ — los paquetes se firman de uno en uno, así que puede tardar."
+		),
+		"ipa.resignAllConfirm": (en: "Re-sign all", es: "Volver a firmar todo"),
+		"ipa.resigningProgress": (en: "Re-signing %d of %d", es: "Firmando %d de %d"),
+		"ipa.resignAllFailedOne": (
+			en: "1 package could not be re-signed: %@",
+			es: "1 paquete no se pudo volver a firmar: %@"
+		),
+		"ipa.resignAllFailedMany": (
+			en: "%d packages could not be re-signed: %@",
+			es: "%d paquetes no se pudieron volver a firmar: %@"
+		),
 	]
 }

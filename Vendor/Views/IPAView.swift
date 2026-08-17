@@ -24,15 +24,30 @@ struct IPAView: View {
 	/// pipeline, installing an already-signed build just needs `handOff`. The
 	/// pill already knows which one applies at the moment it is tapped; the
 	/// queue only has to remember which was asked for.
+	///
+	/// `sign`'s completion closure rides along with it into the queue rather
+	/// than living outside it. Without that, a batch re-sign's per-package
+	/// callback would only ever fire for the one package that started
+	/// immediately — every other one takes the queued branch inside `sign(_:)`,
+	/// and a closure not carried by the enum case never reaches `advanceQueue`.
 	private enum QueuedAction {
-		case sign(ImportedIPA)
+		case sign(ImportedIPA, onComplete: ((Result<Void, Error>) -> Void)?)
 		case install(ImportedIPA)
 
 		var item: ImportedIPA {
 			switch self {
-			case .sign(let item), .install(let item): return item
+			case .sign(let item, _), .install(let item): return item
 			}
 		}
+	}
+
+	/// Raised by `sign(_:onComplete:)` for a package that never reached the
+	/// engine at all — no certificate chosen, or the one it holds can no
+	/// longer sign. `failure` already tells the user why on screen; this only
+	/// exists so a batch caller's `onComplete` still fires instead of hanging
+	/// forever waiting for a job that was never going to start.
+	private enum SignDispatchError: Error {
+		case notReady
 	}
 
 	private enum Shelf: String, CaseIterable {
@@ -89,11 +104,36 @@ struct IPAView: View {
 	/// more with it than the swipe implies — the signed build, the tweaks and the
 	/// custom icon go too, with nothing to undo it.
 	@State private var confirmingDelete: ImportedIPA?
+	/// Snapshot of what "re-sign all" is about to do, taken the moment the
+	/// toolbar button is tapped so the dialog's count and certificate name
+	/// can't drift out from under it before the user answers.
+	@State private var confirmingResignAll: ResignAllConfirmation?
+	/// Live only while a batch re-sign is working through its list.
+	@State private var batchResign: BatchResign?
+
+	/// What "re-sign all" is about to run, fixed at the moment the
+	/// confirmation dialog opens.
+	private struct ResignAllConfirmation {
+		var certificateName: String
+		var targets: [ImportedIPA]
+	}
+
+	/// Tracks one batch re-sign as it works through `targetCount` packages one
+	/// at a time. `completed` only ever counts a package once its own signing
+	/// attempt has resolved — success or failure — which is also the same
+	/// moment its name is added to `failedNames` if it didn't make it.
+	private struct BatchResign {
+		var targetCount: Int
+		var completed: Int = 0
+		var failedNames: [String] = []
+
+		var isFinished: Bool { completed >= targetCount }
+	}
 
 	var body: some View {
 		Screen(
 			t("tab.ipa"),
-			toolbar: AnyView(addButton),
+			toolbar: AnyView(toolbarButtons),
 			contentBlur: running == nil && !showingTrustSetup ? 0 : 16
 		) {
 			shelfPicker.scrollEdgeSoftening()
@@ -108,6 +148,26 @@ struct IPAView: View {
 				}
 				.padding(14)
 				.card(padding: 0)
+			}
+
+			// Same slot as the other progress rows below it, so a batch that
+			// started while nothing else was queued still has a home for its
+			// own status line.
+			if let batchResign {
+				HStack(spacing: 10) {
+					ProgressView()
+					Text(String(
+						format: t("ipa.resigningProgress"),
+						min(batchResign.completed + 1, batchResign.targetCount),
+						batchResign.targetCount
+					))
+					.font(.system(size: 13))
+					.foregroundStyle(Color.inkSecondary)
+					Spacer(minLength: 0)
+				}
+				.padding(14)
+				.card(padding: 0)
+				.scrollEdgeSoftening()
 			}
 
 			// Above the shelf rather than after the last card on it. Every one of
@@ -197,6 +257,22 @@ struct IPAView: View {
 		} message: { _ in
 			Text(t("ipa.deleteConfirmDetail"))
 		}
+		// Same dialog pattern as delete, one confirmation dialog down: the
+		// system's own affordance, not a second floating panel, for an action
+		// that touches every eligible package rather than just one.
+		.confirmationDialog(
+			resignAllTitle,
+			isPresented: Binding(
+				get: { confirmingResignAll != nil },
+				set: { if !$0 { confirmingResignAll = nil } }
+			),
+			titleVisibility: .visible,
+			presenting: confirmingResignAll
+		) { confirmation in
+			Button(t("ipa.resignAllConfirm")) { startResignAll(confirmation) }
+		} message: { confirmation in
+			Text(resignAllDetail(confirmation))
+		}
 		// The tab bar is the TabView's, so it draws above whatever a tab lays
 		// over its own content. Hiding it is what stops sharp chrome sitting on
 		// top of a panel that is meant to be floating free of the screen.
@@ -246,6 +322,29 @@ struct IPAView: View {
 		withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
 			expanded = id
 		}
+	}
+
+	/// The identity actually leading today — same rule as
+	/// `CertificatesView.leadCertificate`, and deliberately not `HomeView`'s:
+	/// that one falls back to the most recently imported certificate so Home
+	/// never shows a blank panel, but a fallback certificate can be expired or
+	/// rejected, and re-signing a package with one of those would only fail
+	/// the moment `sign(_:)` checked `canSignNow`. Nil here has to mean
+	/// exactly one thing — nothing can currently sign — since it's also what
+	/// keeps the toolbar button off the screen.
+	private var leadCertificate: StoredCertificate? {
+		certificates.certificates
+			.filter(\.canSignNow)
+			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
+			.first
+	}
+
+	/// Packages worth offering to "re-sign all": already signed once, but not
+	/// with the certificate that would be used if they were signed today. A
+	/// package signed with the current lead certificate has nothing to redo.
+	private var packagesNeedingResign: [ImportedIPA] {
+		guard let lead = leadCertificate else { return [] }
+		return store.packages.filter { $0.isSigned && $0.signedWithCertificateID != lead.id }
 	}
 
 	/// Packages on the selected shelf.
@@ -338,11 +437,17 @@ struct IPAView: View {
 	/// Signs and then installs as one job. The user asked for one action and
 	/// one bar: the stages continue into each other rather than the progress
 	/// resetting the moment the signature lands.
-	private func sign(_ item: ImportedIPA) {
+	///
+	/// `onComplete` is nil for every ordinary tap on Sign — it exists purely
+	/// so `startResignAll` can hear back, per package, without this function
+	/// knowing anything about batches. It fires exactly once, the moment this
+	/// package's own signing attempt resolves either way.
+	private func sign(_ item: ImportedIPA, onComplete: ((Result<Void, Error>) -> Void)? = nil) {
 		guard let certID = item.signedWithCertificateID,
 			  let certificate = certificates.certificates.first(where: { $0.id == certID })
 		else {
 			failure = String(format: t("ipa.pickCertFirst"), item.name)
+			onComplete?(.failure(SignDispatchError.notReady))
 			return
 		}
 		// Expiry is checked here as well as in the picker. The picker stops it
@@ -353,6 +458,7 @@ struct IPAView: View {
 				format: t(certificate.isUsable ? "ipa.certExpired" : "ipa.certRejected"),
 				certificate.name
 			)
+			onComplete?(.failure(SignDispatchError.notReady))
 			return
 		}
 
@@ -364,8 +470,11 @@ struct IPAView: View {
 		// turn instead — `advanceQueue()` calls back in here once the current
 		// job's panel is dismissed.
 		guard job == nil else {
-			guard runningItemID != item.id, !queue.contains(where: { $0.item.id == item.id }) else { return }
-			queue.append(.sign(item))
+			guard runningItemID != item.id, !queue.contains(where: { $0.item.id == item.id }) else {
+				onComplete?(.failure(SignDispatchError.notReady))
+				return
+			}
+			queue.append(.sign(item, onComplete: onComplete))
 			return
 		}
 
@@ -418,6 +527,13 @@ struct IPAView: View {
 				signedFile = output.archive
 				lastSigned = signed
 				expanded = nil
+				// Reported here rather than after the install below: this is the
+				// step "re-sign" actually promises, and it already succeeded.
+				// Whatever the install prompt does next is a separate question —
+				// see the comment on that block — and shouldn't flip a package
+				// that is genuinely re-signed into a batch failure just because
+				// its install was cancelled or came back later.
+				onComplete?(.success(()))
 			} catch {
 				// Only what this run produced, and only when there was nothing
 				// there to begin with. Re-signing writes to the same path, so
@@ -431,6 +547,7 @@ struct IPAView: View {
 				}
 				Haptics.failure()
 				task.fail(error.localizedDescription)
+				onComplete?(.failure(error))
 				return
 			}
 
@@ -445,6 +562,97 @@ struct IPAView: View {
 				reportInstallFailure(error, on: task)
 			}
 		}
+	}
+
+	// MARK: Re-sign all
+
+	/// Title for the batch confirmation dialog. A plain computed property
+	/// rather than a parameter of the dialog itself: `confirmationDialog`'s
+	/// title isn't handed the presented value the way its actions and message
+	/// closures are, so this reads `confirmingResignAll` directly.
+	private var resignAllTitle: String {
+		let count = confirmingResignAll?.targets.count ?? 0
+		return count == 1
+			? t("ipa.resignAllTitleOne")
+			: String(format: t("ipa.resignAllTitleMany"), count)
+	}
+
+	private func resignAllDetail(_ confirmation: ResignAllConfirmation) -> String {
+		confirmation.targets.count == 1
+			? String(format: t("ipa.resignAllDetailOne"), confirmation.certificateName)
+			: String(
+				format: t("ipa.resignAllDetailMany"),
+				confirmation.targets.count,
+				confirmation.certificateName
+			)
+	}
+
+	/// Puts every package in the confirmation snapshot through `sign(_:)` —
+	/// the exact function the single package's own Sign / Sign Again button
+	/// already calls. Nothing here talks to `SigningPipeline` or the engine
+	/// directly.
+	///
+	/// The certificate is re-read live rather than trusted from the snapshot:
+	/// the confirmation dialog is modal, so it shouldn't have gone stale, but
+	/// "the certificate now active" should mean now, at the moment the batch
+	/// actually starts, not whenever the button was first tapped.
+	///
+	/// Calling `sign(_:)` once per package — rather than awaiting each one in
+	/// turn — is what keeps this sequential without this function having to
+	/// know that: the first call finds `job == nil` and starts immediately;
+	/// by the time the loop reaches the second package, `sign(_:)` has
+	/// already set `job` and every call after the first takes its existing
+	/// queued-while-busy branch, the same one a second tap on Sign already
+	/// falls into. One package signs at a time either way, which is the
+	/// whole reason `Task.detached` in `SigningPipeline` cannot run two of
+	/// these at once to begin with.
+	private func startResignAll(_ confirmation: ResignAllConfirmation) {
+		guard let lead = leadCertificate else { return }
+		let targets = confirmation.targets
+		guard !targets.isEmpty else { return }
+
+		failure = nil
+		batchResign = BatchResign(targetCount: targets.count)
+
+		for item in targets {
+			store.setCertificate(lead.id, for: item)
+			// `item` still carries whatever certificate it last signed with —
+			// `setCertificate` doesn't hand back an updated copy — so `sign(_:)`
+			// has to be given the record `store` just rewrote, not this one.
+			guard let refreshed = store.packages.first(where: { $0.id == item.id }) else {
+				recordBatchOutcome(name: item.name, succeeded: false)
+				continue
+			}
+			let name = item.name
+			sign(refreshed) { result in
+				switch result {
+				case .success: recordBatchOutcome(name: name, succeeded: true)
+				case .failure: recordBatchOutcome(name: name, succeeded: false)
+				}
+			}
+		}
+	}
+
+	/// Folds one package's outcome into the running batch. A failure never
+	/// stops the rest — `sign(_:)` was already called for every target before
+	/// any of them reported back — this only decides what the batch says once
+	/// the last one finally does, through the same `failure` banner every
+	/// other error on this screen already uses.
+	private func recordBatchOutcome(name: String, succeeded: Bool) {
+		guard var state = batchResign else { return }
+		state.completed += 1
+		if !succeeded { state.failedNames.append(name) }
+
+		guard state.isFinished else {
+			batchResign = state
+			return
+		}
+		batchResign = nil
+		guard !state.failedNames.isEmpty else { return }
+		let names = state.failedNames.joined(separator: ", ")
+		failure = state.failedNames.count == 1
+			? String(format: t("ipa.resignAllFailedOne"), names)
+			: String(format: t("ipa.resignAllFailedMany"), state.failedNames.count, names)
 	}
 
 	/// Installs an already-signed package, reusing the same bar.
@@ -531,8 +739,8 @@ struct IPAView: View {
 	private func advanceQueue() {
 		guard !queue.isEmpty else { return }
 		switch queue.removeFirst() {
-		case .sign(let item):    sign(item)
-		case .install(let item): installSigned(item: item)
+		case .sign(let item, let onComplete): sign(item, onComplete: onComplete)
+		case .install(let item):              installSigned(item: item)
 		}
 	}
 
@@ -587,6 +795,15 @@ struct IPAView: View {
 
 	// MARK: Chrome
 
+	private var toolbarButtons: some View {
+		HStack(spacing: 10) {
+			if !packagesNeedingResign.isEmpty {
+				resignAllButton
+			}
+			addButton
+		}
+	}
+
 	private var addButton: some View {
 		Button { pickPackage() } label: {
 			Image(systemName: "plus")
@@ -599,6 +816,34 @@ struct IPAView: View {
 		// and the same circle sits on the Certificates screen doing something
 		// else entirely.
 		.accessibilityLabel(t("ipa.import"))
+	}
+
+	/// Only appears once a certificate change has actually left something
+	/// behind — the ordinary case is that nothing has, and a button offering
+	/// to redo work nobody needs redone would just be clutter next to Import.
+	private var resignAllButton: some View {
+		let targets = packagesNeedingResign
+		return Button {
+			guard let lead = leadCertificate else { return }
+			Haptics.tap()
+			confirmingResignAll = ResignAllConfirmation(certificateName: lead.name, targets: targets)
+		} label: {
+			HStack(spacing: 5) {
+				Image(systemName: "arrow.triangle.2.circlepath")
+					.font(.system(size: 13, weight: .bold))
+				Text("\(targets.count)")
+					.font(.system(size: 12, weight: .bold))
+			}
+			.foregroundStyle(.white)
+			.padding(.horizontal, 12)
+			.frame(height: 34)
+			.background(Capsule().fill(LinearGradient.actionFlow))
+		}
+		.accessibilityLabel(
+			targets.count == 1
+				? t("ipa.resignAllA11yOne")
+				: String(format: t("ipa.resignAllA11yMany"), targets.count)
+		)
 	}
 
 	// MARK: Package card

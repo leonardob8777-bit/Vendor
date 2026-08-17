@@ -106,6 +106,17 @@ final class ImageCache: @unchecked Sendable {
 		}
 		return folder.appendingPathComponent(String(hash, radix: 36))
 	}
+
+	/// Nothing here ever expires on its own — the folder just grows for as
+	/// long as Vendor is installed. Settings' storage row is the only caller,
+	/// giving someone who wants the space back a way to ask for it.
+	func clear() {
+		memory.removeAllObjects()
+		let files = (try? FileManager.default.contentsOfDirectory(
+			at: folder, includingPropertiesForKeys: nil
+		)) ?? []
+		for file in files { try? FileManager.default.removeItem(at: file) }
+	}
 }
 
 /// Drop-in replacement for `AsyncImage` that goes through the cache.

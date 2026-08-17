@@ -124,7 +124,7 @@ enum Strings {
 
 	private static let extras: [[String: Entry]] = [
 		homeExtras, appsExtras, detailExtras, ipaExtras,
-		certificatesExtras, guideExtras, chromeExtras,
+		certificatesExtras, guideExtras, chromeExtras, settingsExtras,
 	]
 
 	static let core: [String: Entry] = [

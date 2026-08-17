@@ -119,5 +119,25 @@ extension Strings {
 			en: "Settings opens on Vendor's own page. Tap back once to reach the top of Settings, where Profile Downloaded is waiting.",
 			es: "Ajustes se abre en la página de Vendor. Toca atrás una vez para llegar al principio de Ajustes, donde te espera Perfil descargado."
 		),
+
+		// MARK: Expiry notifications
+
+		"certs.notifyToggle": (
+			en: "Notify before this expires",
+			es: "Avisar antes de que caduque"
+		),
+		"certs.notifyToggleNote": (
+			en: "A local reminder 7 days and 1 day before — nothing leaves the phone to send it.",
+			es: "Un aviso local 7 días antes y 1 día antes: no sale nada del teléfono para enviarlo."
+		),
+		"certs.notify.title": (en: "Certificate expiring", es: "Certificado por caducar"),
+		"certs.notify.body7": (
+			en: "%@ expires in 7 days. Re-sign your apps before then.",
+			es: "%@ caduca en 7 días. Vuelve a firmar tus apps antes de esa fecha."
+		),
+		"certs.notify.body1": (
+			en: "%@ expires tomorrow. Re-sign your apps before it does.",
+			es: "%@ caduca mañana. Vuelve a firmar tus apps antes de que pase."
+		),
 	]
 }

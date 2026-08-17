@@ -40,6 +40,13 @@ struct CertificateDetailSheet: View {
 	/// each one would multiply for no reason.
 	private let profile: ProvisioningProfile?
 
+	/// Keyed on this certificate's own id rather than one app-wide switch, so
+	/// turning notifications off for a certificate that is about to be
+	/// replaced does not silently mute the next one imported after it.
+	/// Defaults to on: the point of this feature is that it works without
+	/// anyone having to find the setting first.
+	@AppStorage private var notifyEnabled: Bool
+
 	init(
 		certificate: StoredCertificate,
 		isLead: Bool,
@@ -55,6 +62,7 @@ struct CertificateDetailSheet: View {
 		self.onDelete = onDelete
 		self.dismiss = dismiss
 		self.profile = ProvisioningProfile.read(at: CertificateStore.shared.provisionURL(for: certificate.id))
+		self._notifyEnabled = AppStorage(wrappedValue: true, "certNotify.\(certificate.id.uuidString)")
 	}
 
 	var body: some View {
@@ -72,6 +80,14 @@ struct CertificateDetailSheet: View {
 		// bottom of the safe area partway through the opening, and a panel
 		// measured against it would settle downwards as that happens.
 		.ignoresSafeArea(edges: .bottom)
+		// The toggle already flipped and redrew by the time this fires — this
+		// only has to make the notifier agree with what is now on screen.
+		// Scoped to this one certificate rather than a full store resync,
+		// which would also be correct but means walking every certificate to
+		// react to one switch.
+		.onChange(of: notifyEnabled) { _ in
+			CertificateExpiryNotifier.apply(to: certificate)
+		}
 	}
 
 	private var panel: some View {
@@ -80,6 +96,7 @@ struct CertificateDetailSheet: View {
 				VStack(alignment: .leading, spacing: 16) {
 					header
 					facts
+					notifyToggle
 
 					if case .rejected(let reason) = health {
 						CalloutRow(text: "\(t("certs.rejectedReason")): \(reason)")
@@ -197,6 +214,42 @@ struct CertificateDetailSheet: View {
 					.fixedSize(horizontal: false, vertical: true)
 					.padding(.top, 8)
 			}
+		}
+	}
+
+	// MARK: Expiry notifications
+
+	/// Nothing to warn about without a date, so the row does not offer a
+	/// switch that would never do anything — matches `CertificateExpiryNotifier`,
+	/// which skips a certificate with no `expiresAt` the same way.
+	@ViewBuilder
+	private var notifyToggle: some View {
+		if certificate.expiresAt != nil {
+			HStack(spacing: 10) {
+				Image(systemName: notifyEnabled ? "bell.fill" : "bell.slash")
+					.font(.system(size: 13, weight: .light))
+					.foregroundStyle(notifyEnabled ? Color.brand : Color.inkSecondary)
+					.frame(width: 18)
+
+				VStack(alignment: .leading, spacing: 1) {
+					Text(t("certs.notifyToggle"))
+						.font(.system(size: 12.5, weight: .medium))
+						.foregroundStyle(Color.inkPrimary)
+					Text(t("certs.notifyToggleNote"))
+						.font(.system(size: 10))
+						.foregroundStyle(Color.inkSecondary)
+						.fixedSize(horizontal: false, vertical: true)
+				}
+
+				Spacer(minLength: 0)
+
+				Toggle("", isOn: $notifyEnabled)
+					.labelsHidden()
+					.tint(Color.brand)
+			}
+			.padding(9)
+			.background(.ultraThinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 		}
 	}
 

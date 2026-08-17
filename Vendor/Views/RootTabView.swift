@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct RootTabView: View {
 	enum Tab: Hashable {
@@ -82,6 +83,15 @@ struct RootTabView: View {
 				.tabItem { tabLabel(.guide) }
 		}
 		.tint(.brand)
+		// One subscription for the app's whole lifetime rather than wiring
+		// this into every screen that happens to touch certificates. Fires
+		// once immediately with whatever is already imported — `$certificates`
+		// is `@Published`, so a new subscriber gets the current value before
+		// any future change — which doubles as the launch-time resync, and
+		// again on every import or delete after that.
+		.onReceive(CertificateStore.shared.$certificates) { certificates in
+			CertificateExpiryNotifier.sync(certificates)
+		}
 	}
 
 	/// iOS substitutes the `.fill` variant for tab symbols unless the label
