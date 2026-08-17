@@ -224,6 +224,8 @@ enum GuideContent {
 			]),
 
 			.note(t("guide.refresh.note")),
+			.note(t("guide.refresh.notifyNote")),
+			.note(t("guide.refresh.batchNote")),
 
 			.warning(t("guide.refresh.warn")),
 		]
@@ -251,6 +253,9 @@ enum GuideContent {
 
 			.heading(t("guide.faq.h5")),
 			.paragraph(t("guide.faq.p5")),
+
+			.heading(t("guide.faq.h6")),
+			.paragraph(t("guide.faq.p6")),
 
 			.warning(t("guide.faq.warn")),
 		]

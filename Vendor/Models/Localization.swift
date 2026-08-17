@@ -880,6 +880,14 @@ enum Strings {
 			en: "Vendor turns the counter amber in the last third of a certificate's life, so a short one warns you in its final days rather than from the moment it arrives.",
 			es: "Vendor pone el contador en ámbar en el último tercio de la vida del certificado, así uno corto avisa en sus últimos días en vez de desde que llega."
 		),
+		"guide.refresh.notifyNote": (
+			en: "Vendor can also tell you before the counter reaches zero: open a certificate's own card on the Certificates tab and turn on its notification toggle for a nudge a week out and again the day before.",
+			es: "Vendor también puede avisarte antes de que el contador llegue a cero: abre la ficha del certificado en la pestaña Certificados y activa su interruptor de notificación para recibir un aviso una semana antes y otro el día anterior."
+		),
+		"guide.refresh.batchNote": (
+			en: "Signed more than one app with the certificate that's expiring? The IPA tab can re-sign every one of them with the new certificate in a single action, instead of opening each app one at a time.",
+			es: "¿Firmaste más de una app con el certificado que está por caducar? La pestaña IPA puede volver a firmarlas todas con el nuevo certificado en una sola acción, en vez de abrir cada app una por una."
+		),
 		"guide.refresh.warn": (
 			en: "If the app stopped working before its expiry date, the certificate was probably revoked rather than expired. Re-signing with the same certificate will not help; you need a different one.",
 			es: "Si la app dejó de funcionar antes de su fecha de caducidad, lo más probable es que el certificado fuera revocado, no que caducara. Volver a firmar con el mismo certificado no servirá: necesitas otro."
@@ -902,8 +910,8 @@ enum Strings {
 		),
 		"guide.faq.h3": (en: "Do my certificates leave the phone?", es: "¿Mis certificados salen del teléfono?"),
 		"guide.faq.p3": (
-			en: "No. Signing runs on the device. The .p12 sits in Vendor's own private folder, its password is held in the iOS keychain rather than beside it, and neither is ever uploaded. Vendor has no account system and collects no analytics.",
-			es: "No. La firma se ejecuta en el dispositivo. El .p12 está en la carpeta privada de Vendor, su contraseña vive en el llavero de iOS y no junto a él, y ninguno de los dos se sube nunca. Vendor no tiene sistema de cuentas ni recoge analíticas."
+			en: "No. Signing runs on the device. The .p12 sits in Vendor's own private folder, its password is held in the iOS keychain rather than beside it, and neither is ever uploaded. That folder is also excluded from iCloud and iTunes/Finder backups, so a phone backup does not carry it off either. Vendor has no account system and collects no analytics.",
+			es: "No. La firma se ejecuta en el dispositivo. El .p12 está en la carpeta privada de Vendor, su contraseña vive en el llavero de iOS y no junto a él, y ninguno de los dos se sube nunca. Esa carpeta también está excluida de los backups de iCloud y de iTunes/Finder, así que un respaldo del teléfono tampoco se la lleva. Vendor no tiene sistema de cuentas ni recoge analíticas."
 		),
 		"guide.faq.h4": (en: "Can I get this from the App Store?", es: "¿Puedo conseguir esto en la App Store?"),
 		"guide.faq.p4": (
@@ -914,6 +922,14 @@ enum Strings {
 		"guide.faq.p5": (
 			en: "A free Apple ID signs for seven days at a time and stops at three apps, so it means coming back every week. A bought certificate is what avoids that. Vendor signs with either — the difference is how often you have to do it again.",
 			es: "Un Apple ID gratuito firma de siete en siete días y se queda en tres apps, así que obliga a volver cada semana. Un certificado comprado es lo que evita eso. Vendor firma con cualquiera de los dos: la diferencia es cada cuánto tienes que repetirlo."
+		),
+		"guide.faq.h6": (
+			en: "What if someone else picks up my phone?",
+			es: "¿Y si alguien más toma mi teléfono?"
+		),
+		"guide.faq.p6": (
+			en: "Turn on Require Face ID in Settings (the gear icon on Home). Vendor then locks itself the moment it leaves the foreground, and asks for Face ID, Touch ID, or your device passcode before showing anything again. Off by default, since not everyone wants an extra step to open an app that already asks for nothing else.",
+			es: "Activa Requerir Face ID en Ajustes (el icono de engranaje en Inicio). Vendor se bloquea entonces en cuanto deja de estar en primer plano, y pide Face ID, Touch ID o el código del dispositivo antes de volver a mostrar nada. Apagado por defecto, porque no todo el mundo quiere un paso extra para abrir una app que ya no pide nada más."
 		),
 		"guide.faq.warn": (
 			en: "Vendor is not affiliated with Apple Inc. Sideloading is at your own risk.",
