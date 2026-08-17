@@ -112,6 +112,25 @@ extension Strings {
 		),
 		"certs.discard": (en: "Discard", es: "Descartar"),
 
+		// MARK: Exporting
+		//
+		// To move a certificate to another iPhone. Vendor no longer carries
+		// certificates in a device backup on its own — see CertificateStore's
+		// isExcludedFromBackup — so this is the one path left for anyone who
+		// wants to move one deliberately.
+
+		"certs.export": (en: "Export", es: "Exportar"),
+		"certs.exportConfirm": (
+			en: "Export this certificate?",
+			es: "¿Exportar este certificado?"
+		),
+		"certs.exportConfirmDetail": (
+			en: "Shares the .p12 and its profile through whatever you pick next — AirDrop, Files, anything. The password is not included: copy it separately and send it a different way, the same way it reached you.",
+			es: "Comparte el .p12 y su perfil por lo que elijas a continuación: AirDrop, Archivos, lo que sea. La contraseña no va incluida: cópiala aparte y mándala por otro medio, igual que a ti te llegó."
+		),
+		"certs.copyPassword": (en: "Copy password", es: "Copiar contraseña"),
+		"certs.passwordCopied": (en: "Password copied", es: "Contraseña copiada"),
+
 		// MARK: Trust setup
 
 		"trust.openSettings": (en: "Open Settings", es: "Abrir Ajustes"),

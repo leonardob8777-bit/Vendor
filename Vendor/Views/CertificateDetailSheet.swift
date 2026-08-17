@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct CertificateDetailSheet: View {
 	let certificate: StoredCertificate
@@ -46,6 +47,8 @@ struct CertificateDetailSheet: View {
 	/// Defaults to on: the point of this feature is that it works without
 	/// anyone having to find the setting first.
 	@AppStorage private var notifyEnabled: Bool
+	@State private var confirmingExport = false
+	@State private var passwordCopied = false
 
 	init(
 		certificate: StoredCertificate,
@@ -105,6 +108,7 @@ struct CertificateDetailSheet: View {
 						CalloutRow(text: t("certs.profileUnreadable"))
 					}
 
+					exportRow
 					deleteButton
 				}
 				.padding(.horizontal, 18)
@@ -314,6 +318,69 @@ struct CertificateDetailSheet: View {
 				.glassCircle(size: 34)
 		}
 		.accessibilityLabel(t("common.close"))
+	}
+
+	// MARK: Exporting
+
+	/// Two actions side by side rather than export alone: a `.p12` shared
+	/// without its password reaching the other end some other way is just a
+	/// file nobody can open, so the means to relay the second half sits right
+	/// next to the button that shares the first.
+	private var exportRow: some View {
+		HStack(spacing: 10) {
+			Button {
+				Haptics.tap()
+				confirmingExport = true
+			} label: {
+				HStack(spacing: 8) {
+					Image(systemName: "square.and.arrow.up")
+						.font(.system(size: 13, weight: .medium))
+					Text(t("certs.export"))
+						.font(.system(size: 13, weight: .semibold))
+				}
+				.foregroundStyle(Color.brand)
+				.frame(maxWidth: .infinity)
+				.padding(.vertical, 11)
+				.background(Capsule().fill(Color.brandSoft))
+			}
+
+			Button(action: copyPassword) {
+				Image(systemName: passwordCopied ? "checkmark" : "doc.on.doc")
+					.font(.system(size: 13, weight: .medium))
+					.foregroundStyle(passwordCopied ? Color.ok : Color.inkSecondary)
+					.frame(width: 42, height: 42)
+					.background(.ultraThinMaterial)
+					.clipShape(Circle())
+			}
+			.accessibilityLabel(t("certs.copyPassword"))
+		}
+		.confirmationDialog(
+			t("certs.exportConfirm"),
+			isPresented: $confirmingExport,
+			titleVisibility: .visible
+		) {
+			Button(t("certs.export")) { export() }
+		} message: {
+			Text(t("certs.exportConfirmDetail"))
+		}
+	}
+
+	private func export() {
+		Haptics.tap()
+		ShareSheet.present(items: [
+			CertificateStore.shared.p12URL(for: certificate.id),
+			CertificateStore.shared.provisionURL(for: certificate.id),
+		])
+	}
+
+	private func copyPassword() {
+		Haptics.tap()
+		UIPasteboard.general.string = certificate.password
+		withAnimation(.easeInOut(duration: 0.2)) { passwordCopied = true }
+		Task {
+			try? await Task.sleep(nanoseconds: 2_000_000_000)
+			withAnimation(.easeInOut(duration: 0.2)) { passwordCopied = false }
+		}
 	}
 
 	private var deleteButton: some View {
