@@ -287,6 +287,10 @@ struct SignOptionsSection: View {
 			Toggle("", isOn: isOn)
 				.labelsHidden()
 				.tint(Color.brand)
+				// `labelsHidden()` hides the empty title from VoiceOver too, not
+				// just sighted users — without this every toggle here reads as
+				// a bare "switch, off" with nothing said about what it toggles.
+				.accessibilityLabel(title)
 		}
 		.padding(9)
 		.background(.ultraThinMaterial)

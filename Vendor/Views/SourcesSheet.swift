@@ -318,6 +318,7 @@ struct SourcesSheet: View {
 						Toggle("", isOn: on)
 							.labelsHidden()
 							.tint(Color.brand)
+							.accessibilityLabel(entry.url.host ?? entry.url.absoluteString)
 					}
 
 					Text(store.includes(entry.url) ? t("sources.showAllOn") : t("sources.showAllNote"))

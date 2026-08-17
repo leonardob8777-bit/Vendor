@@ -265,6 +265,7 @@ struct SettingsView: View {
 					.labelsHidden()
 					.tint(.brand)
 					.disabled(!AppLock.shared.canAuthenticate())
+					.accessibilityLabel(t("settings.appLock"))
 			}
 			.padding(10)
 			.background(.ultraThinMaterial)

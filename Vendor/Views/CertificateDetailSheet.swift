@@ -250,6 +250,7 @@ struct CertificateDetailSheet: View {
 				Toggle("", isOn: $notifyEnabled)
 					.labelsHidden()
 					.tint(Color.brand)
+					.accessibilityLabel(t("certs.notifyToggle"))
 			}
 			.padding(9)
 			.background(.ultraThinMaterial)
