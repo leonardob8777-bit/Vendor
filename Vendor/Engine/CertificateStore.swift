@@ -48,10 +48,21 @@ final class CertificateStore: ObservableObject {
 	/// promises these never leave the device; they were sitting in a folder made
 	/// for taking things off it.
 	private var root: URL {
-		let url = FileManager.default.applicationSupportDirectory.appendingPathComponent("Certificates", isDirectory: true)
+		var url = FileManager.default.applicationSupportDirectory.appendingPathComponent("Certificates", isDirectory: true)
 		if !fm.fileExists(atPath: url.path) {
 			try? fm.createDirectory(at: url, withIntermediateDirectories: true)
 		}
+		// Every private key Vendor holds lives somewhere under here. Excluding
+		// the folder itself excludes everything already inside it too, so this
+		// one flag covers certificates imported before this existed as well as
+		// every one imported after — nothing about "your certificates never
+		// leave the phone" holds if an iCloud or iTunes backup carries them off
+		// instead. Set on every access rather than once at creation: cheap, and
+		// it means an OS or restore path that ever clears the flag gets it back
+		// the next time anything touches a certificate.
+		var values = URLResourceValues()
+		values.isExcludedFromBackup = true
+		try? url.setResourceValues(values)
 		return url
 	}
 
