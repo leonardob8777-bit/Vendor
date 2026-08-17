@@ -13,6 +13,10 @@ Vendor signs `.ipa` packages with a certificate you supply (a free Apple ID iden
 - **On-device install**, no cable and no third-party relay: Vendor serves the signed package to iOS itself over a local HTTPS connection.
 - **English and Spanish**, switchable at any time, everywhere in the app.
 
+## Download
+
+Don't want to build it yourself? Every [release](https://github.com/leonardob8777-bit/Vendor/releases) carries an unsigned `Vendor.ipa` built straight from that tag — sign it with your own certificate the same way you would any package you import into Vendor.
+
 ## Requirements
 
 - iOS 15.0 or later.

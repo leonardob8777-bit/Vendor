@@ -64,6 +64,12 @@ extension FeaturedApp {
 		glow: .mint,
 		iconURL: nil,
 		iconAsset: "EagleIcon",
+		// Shipped inside Vendor itself rather than fetched — GitHub release
+		// downloads aren't guaranteed to be reachable for every user (rate
+		// limits, redirects some networks strip), and this one's small enough
+		// that carrying it costs nothing. `downloadURL` stays pointed at the
+		// real release for provenance; `bundledFile` is what Get actually uses.
+		bundledFile: "eagle",
 		downloadURL: URL(string: "https://github.com/leonardob8777-bit/Eagle/releases/download/v0.3.0-beta.7/Eagle.ipa")!,
 		size: 11_330_936,
 		version: "0.3.0"
