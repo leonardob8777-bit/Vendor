@@ -34,13 +34,7 @@ struct HomeView: View {
 	/// again rather than to the reason it was refused — and it left the panel's
 	/// own rejection branch unreachable.
 	private var leadCertificate: StoredCertificate? {
-		store.certificates
-			.filter(\.canSignNow)
-			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
-			.first
-		?? store.certificates
-			.sorted { $0.importedAt > $1.importedAt }
-			.first
+		store.leadCertificate(includingFallback: true)
 	}
 
 	var body: some View {

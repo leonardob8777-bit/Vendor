@@ -146,6 +146,28 @@ final class CertificateStore: ObservableObject {
 		.sorted { $0.importedAt > $1.importedAt }
 	}
 
+	/// The healthy certificate that expires soonest — the one that will
+	/// actually be used the next time something signs. Three screens
+	/// (Home, Certificates, IPA) each worked this out for themselves with
+	/// the same filter-and-sort and their own comment cross-referencing
+	/// the others; centralised here instead so the rule lives in one place.
+	///
+	/// `includingFallback: true` additionally falls back to the most
+	/// recently imported certificate when nothing is currently healthy, so
+	/// a screen that always shows a leading identity (Home) does not show a
+	/// blank panel to someone who owns only a rejected certificate. A
+	/// screen where nil has to mean exactly one thing — nothing can sign
+	/// right now, because it also gates a button or a re-sign target —
+	/// wants the default, `false`.
+	func leadCertificate(includingFallback: Bool = false) -> StoredCertificate? {
+		let healthy = certificates
+			.filter(\.canSignNow)
+			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
+			.first
+		guard includingFallback else { return healthy }
+		return healthy ?? certificates.sorted { $0.importedAt > $1.importedAt }.first
+	}
+
 	// MARK: Importing
 
 	/// Copies the two picked files into place, asks the engine to vet them,
@@ -178,15 +200,20 @@ final class CertificateStore: ObservableObject {
 		// segfaults on an uninitialised pointer — see `CertificateInspector` for
 		// the whole story. Detached because reading and decrypting the key is
 		// not instant and this is reached from the main actor.
-		let status = await Task.detached(priority: .userInitiated) {
+		//
+		// `async let` rather than two awaited statements: neither reads the
+		// other's result, so there is nothing to wait for between them — the
+		// profile parse used to sit entirely behind the p12 decrypt instead of
+		// running alongside it.
+		async let statusTask = Task.detached(priority: .userInitiated) {
 			CertificateInspector.inspect(
 				p12: p12Path, password: password, profile: provisionPath
 			)
 		}.value
-
-		let profile = await Task.detached(priority: .userInitiated) {
+		async let profileTask = Task.detached(priority: .userInitiated) {
 			ProvisioningProfile.read(at: provisionPath)
 		}.value
+		let (status, profile) = await (statusTask, profileTask)
 
 		let cert = StoredCertificate(
 			id: id,

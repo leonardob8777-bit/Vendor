@@ -162,10 +162,17 @@ enum DebArchive {
 
 		// Only a hint, and one the file being read gets to choose: four bytes
 		// saying four gigabytes would have this allocate four gigabytes before
-		// reading a single byte of the stream. Capped, because `decode` grows
-		// the buffer on its own when the first guess is too small — so the cap
-		// costs a retry at worst and can never truncate the result.
-		let guess = min(max(declared, body.count * 4), 256 << 20)
+		// reading a single byte of the stream. A flat 256MB cap still let a
+		// tiny forged trailer demand a quarter gigabyte up front for a stream
+		// that might be fifty bytes on disk — bounded by the compressed body's
+		// own size instead, the same ceiling `ZipReader.inflate` uses for the
+		// zip case: DEFLATE cannot expand its input by more than about
+		// 1032:1, so this is a real limit on what the stream can be holding,
+		// not a guess. `decode` still grows the buffer on its own if this
+		// first guess undershoots, so the cap costs a retry at worst and can
+		// never truncate the result.
+		let ceiling = body.count * 1032 + 4096
+		let guess = min(max(declared, body.count * 4), ceiling)
 
 		return decode(body, using: COMPRESSION_ZLIB, hint: guess)
 	}
@@ -274,7 +281,17 @@ enum DebArchive {
 						withIntermediateDirectories: true
 					)
 					try? fm.removeItem(at: target)
-					try? fm.createSymbolicLink(atPath: target.path, withDestinationPath: link)
+					// A hard link's name is relative to the archive root — this
+					// call's `destination` — unlike a symlink's, which the
+					// filesystem resolves relative to the link's own directory.
+					// Handing a root-relative name straight to a tool that reads
+					// it as directory-relative pointed a hard link at the wrong
+					// file whenever the two did not sit side by side, which is
+					// the ordinary case for a tweak's dylib. Resolving it against
+					// the root first and handing the symlink an absolute path
+					// sidesteps the directory-relative reinterpretation entirely.
+					let linkTarget = type == "1" ? destination.appendingPathComponent(link).path : link
+					try? fm.createSymbolicLink(atPath: target.path, withDestinationPath: linkTarget)
 				default:
 					break                              // long names, pax headers: skipped
 				}

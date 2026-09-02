@@ -138,30 +138,7 @@ struct NewCertificateView: View {
 				.padding(.top, 14)
 				.padding(.trailing, 14)
 		}
-		.background {
-			ZStack {
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.fill(.ultraThinMaterial)
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.fill(
-						LinearGradient(
-							colors: [Color.brand.opacity(0.13), Color.mint.opacity(0.07)],
-							startPoint: .topLeading, endPoint: .bottomTrailing
-						)
-					)
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.strokeBorder(
-						LinearGradient(
-							colors: [.white.opacity(0.28), .white.opacity(0.05), Color.mint.opacity(0.18)],
-							startPoint: .topLeading, endPoint: .bottomTrailing
-						),
-						lineWidth: 1
-					)
-			}
-		}
-		.clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-		.shadow(color: .black.opacity(0.45), radius: 30, y: 16)
-		.shadow(color: Color.brand.opacity(0.20), radius: 36, y: 20)
+		.sheetPanelBackground()
 	}
 
 	// MARK: Picking

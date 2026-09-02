@@ -78,30 +78,7 @@ struct LicenseSheet: View {
 			.padding(.trailing, 14)
 			.accessibilityLabel(t("common.close"))
 		}
-		.background {
-			ZStack {
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.fill(.ultraThinMaterial)
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.fill(
-						LinearGradient(
-							colors: [Color.brand.opacity(0.14), Color.mint.opacity(0.08)],
-							startPoint: .topLeading, endPoint: .bottomTrailing
-						)
-					)
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.strokeBorder(
-						LinearGradient(
-							colors: [.white.opacity(0.30), .white.opacity(0.06), Color.mint.opacity(0.20)],
-							startPoint: .topLeading, endPoint: .bottomTrailing
-						),
-						lineWidth: 1
-					)
-			}
-		}
-		.clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-		.shadow(color: .black.opacity(0.45), radius: 28, y: 14)
-		.shadow(color: Color.brand.opacity(0.22), radius: 34, y: 18)
+		.sheetPanelBackground(tone: .warm)
 	}
 
 	private var header: some View {

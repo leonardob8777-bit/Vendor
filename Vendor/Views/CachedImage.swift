@@ -46,6 +46,15 @@ final class ImageCache: @unchecked Sendable {
 		memory.countLimit = 200
 	}
 
+	/// Drops one entry, unlike `clear()` below which empties the whole
+	/// cache. For a URL whose file changed on disk without the URL itself
+	/// changing — a custom app icon re-picked into the same fixed path —
+	/// nothing else would tell a `CachedImage` keyed on that URL to look
+	/// again, since it only ever refetches when its `url` changes.
+	func evict(_ url: URL, maximumPixels: Int = ImageCache.iconPixels) {
+		memory.removeObject(forKey: key(url, maximumPixels))
+	}
+
 	/// Already-decoded image, or nil. Cheap enough to call while laying out.
 	func inMemory(_ url: URL?, maximumPixels: Int = ImageCache.iconPixels) -> UIImage? {
 		guard let url else { return nil }

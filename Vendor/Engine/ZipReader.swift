@@ -115,6 +115,13 @@ enum ZipReader {
 
 		switch entry.compressionMethod {
 		case 0:
+			// Stored means uncompressed, so the two sizes are supposed to match.
+			// Nothing else here enforces that a hostile archive kept its word —
+			// without this, a payload shorter than the size the rest of the app
+			// reads out of the central directory was handed back as if it were
+			// whole, the same silent-truncation shape `inflate` below already
+			// guards against for the compressed case.
+			guard payload.count == entry.uncompressedSize else { return nil }
 			return payload
 		case 8:
 			return inflate(payload, expectedSize: entry.uncompressedSize)

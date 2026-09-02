@@ -191,19 +191,19 @@ struct SignOptionsSection: View {
 	private var iconRow: some View {
 		VStack(alignment: .leading, spacing: 4) {
 			HStack(spacing: 10) {
-				Group {
-					if let url = store.customIconURL(for: item),
-					   let image = UIImage(contentsOfFile: url.path) {
-						Image(uiImage: image)
-							.resizable()
-							.aspectRatio(contentMode: .fill)
-					} else {
-						ZStack {
-							Color.brandSoft
-							Image(systemName: "photo")
-								.font(.system(size: 13, weight: .light))
-								.foregroundStyle(Color.brand)
-						}
+				// `CachedImage` rather than a direct `UIImage(contentsOfFile:)`
+				// read: this row is a computed property inside `body`, so it
+				// re-evaluated on every keystroke into the Name/Bundle ID/Version
+				// fields below — and a direct read re-decoded the full-resolution
+				// photo-library image from disk each time. `CachedImage` decodes
+				// straight to the tile's own size and keeps the result in memory,
+				// so every keystroke after the first draws from the cache instead.
+				CachedImage(url: store.customIconURL(for: item)) {
+					ZStack {
+						Color.brandSoft
+						Image(systemName: "photo")
+							.font(.system(size: 13, weight: .light))
+							.foregroundStyle(Color.brand)
 					}
 				}
 				.frame(width: 34, height: 34)
@@ -245,6 +245,12 @@ struct SignOptionsSection: View {
 			.sheet(isPresented: $pickingPhoto) {
 				SystemImagePicker { data in
 					guard let data, let name = try? store.saveCustomIcon(data, for: item) else { return }
+					// The custom icon always saves to the same fixed file name, so
+					// re-picking one doesn't change the URL `CachedImage` below keys
+					// its cache on — without this, it goes on showing whichever
+					// photo was picked first, since nothing else tells it to look at
+					// the file again.
+					ImageCache.shared.evict(store.folder(for: item.id).appendingPathComponent(name))
 					draft.customIconName = name
 					commit()
 				}

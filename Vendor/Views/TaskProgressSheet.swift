@@ -83,21 +83,30 @@ final class AppTask: Identifiable, ObservableObject {
 
 	@MainActor
 	func advance(to stage: Stage, fraction: Double) {
-		self.stage = stage
+		// Only the stage change is worth a transition — animating on every
+		// fraction tick would refire it many times a second for no visible
+		// gain, since the ring's own arc already animates that part.
+		if stage != self.stage {
+			withAnimation(.easeInOut(duration: 0.25)) { self.stage = stage }
+		}
 		self.fraction = fraction
 	}
 
 	@MainActor
 	func finish(title: String, detail: String?) {
-		completionTitle = title
-		completionDetail = detail
-		stage = .done
+		withAnimation(.easeInOut(duration: 0.25)) {
+			completionTitle = title
+			completionDetail = detail
+			stage = .done
+		}
 		fraction = 1
 	}
 
 	@MainActor
 	func fail(_ message: String) {
-		failure = message
+		withAnimation(.easeInOut(duration: 0.25)) {
+			failure = message
+		}
 	}
 }
 
@@ -146,12 +155,22 @@ struct TaskProgressSheet: View {
 			)
 
 			VStack(spacing: 6) {
+				// `.id` forces SwiftUI to treat a changed headline as a new view
+				// rather than the same one with new text — text content changes
+				// don't cross-fade on their own, only view insertion/removal
+				// does. `advance`/`finish`/`fail` already wrap the state change
+				// that drives this in `withAnimation`, so the swap fades instead
+				// of popping the way the ring's own colour and arc never do.
 				Text(headline)
+					.id(headline)
+					.transition(.opacity)
 					.font(.system(size: 18, weight: .bold))
 					.foregroundStyle(Color.inkPrimary)
 					.multilineTextAlignment(.center)
 
 				Text(subtitle)
+					.id(subtitle)
+					.transition(.opacity)
 					.font(.system(size: 13))
 					.foregroundStyle(Color.inkSecondary)
 					.multilineTextAlignment(.center)
@@ -167,16 +186,19 @@ struct TaskProgressSheet: View {
 					ProgressView()
 						.progressViewStyle(.circular)
 						.tint(Color.inkSecondary)
+						.transition(.opacity)
 				} else {
 					Text("\(Int(task.overall * 100))%")
 						.font(.system(size: 15, weight: .bold))
 						.foregroundStyle(Color.inkPrimary)
 						.monospacedDigit()
+						.transition(.opacity)
 				}
 			}
 
 			footer
 		}
+		.animation(.easeInOut(duration: 0.2), value: task.awaitingSystem)
 		.padding(20)
 		.frame(maxWidth: .infinity)
 		.aspectRatio(1, contentMode: .fit)

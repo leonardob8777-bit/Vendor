@@ -376,6 +376,100 @@ extension View {
 			.shadow(color: .black.opacity(0.16), radius: 6, y: 2)
 	}
 
+	/// Frosted background for a floating panel — the app's own alternative to
+	/// a system sheet, used by every full-screen detail/settings/picker
+	/// overlay. The same nine-file, twenty-line background block this used to
+	/// be copy-pasted into, kept here once instead. Not folded into
+	/// `CardSurface` above: a card inside a list and the one panel that floats
+	/// over a whole screen never wanted the same corner radius or the same
+	/// shadow, so this stays its own modifier rather than another `CardSurface`
+	/// call.
+	func sheetPanelBackground(
+		radius: CGFloat = 28,
+		tone: SheetPanelTone = .standard,
+		brandShadow: Bool = true
+	) -> some View {
+		modifier(SheetPanelBackground(radius: radius, tone: tone, brandShadow: brandShadow))
+	}
+
+}
+
+/// The two washes `sheetPanelBackground` actually ships today — every panel
+/// but `GuideDetailSheet` uses `.standard`; that one alone runs `.warm`,
+/// fractionally brighter in its wash, rim and shadow. Kept apart rather than
+/// quietly folded into one, so consolidating the nine copies of this
+/// background did not also silently reach in and re-tune how one of them
+/// looks.
+enum SheetPanelTone {
+	case standard, warm
+}
+
+private struct SheetPanelBackground: ViewModifier {
+	var radius: CGFloat
+	var tone: SheetPanelTone
+	/// Off for `LicenseSheet`, the one panel light enough that a second,
+	/// coloured cast under the first reads as more shadow than its content
+	/// calls for.
+	var brandShadow: Bool
+
+	private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
+
+	private var wash: (top: Double, bottom: Double) {
+		tone == .warm ? (0.14, 0.08) : (0.13, 0.07)
+	}
+	private var rim: (top: Double, mid: Double, bottom: Double) {
+		tone == .warm ? (0.30, 0.06, 0.20) : (0.28, 0.05, 0.18)
+	}
+	private var lift: (radius: CGFloat, y: CGFloat) {
+		tone == .warm ? (28, 14) : (30, 16)
+	}
+	private var brandLift: (opacity: Double, radius: CGFloat, y: CGFloat) {
+		tone == .warm ? (0.22, 34, 18) : (0.20, 36, 20)
+	}
+
+	func body(content: Content) -> some View {
+		content
+			.background {
+				ZStack {
+					shape.fill(.ultraThinMaterial)
+					shape.fill(
+						LinearGradient(
+							colors: [Color.brand.opacity(wash.top), Color.mint.opacity(wash.bottom)],
+							startPoint: .topLeading, endPoint: .bottomTrailing
+						)
+					)
+					shape.strokeBorder(
+						LinearGradient(
+							colors: [
+								.white.opacity(rim.top),
+								.white.opacity(rim.mid),
+								Color.mint.opacity(rim.bottom),
+							],
+							startPoint: .topLeading, endPoint: .bottomTrailing
+						),
+						lineWidth: 1
+					)
+				}
+			}
+			.clipShape(shape)
+			.shadow(color: .black.opacity(0.45), radius: lift.radius, y: lift.y)
+			.modifier(OptionalBrandShadow(brandShadow: brandShadow ? brandLift : nil))
+	}
+}
+
+/// A clear shadow still costs an offscreen pass, so this skips drawing one
+/// entirely rather than passing an opacity of zero through, the same
+/// reasoning `AuraCast` above already applies to a card's status cast.
+private struct OptionalBrandShadow: ViewModifier {
+	let brandShadow: (opacity: Double, radius: CGFloat, y: CGFloat)?
+
+	func body(content: Content) -> some View {
+		if let brandShadow {
+			content.shadow(color: Color.brand.opacity(brandShadow.opacity), radius: brandShadow.radius, y: brandShadow.y)
+		} else {
+			content
+		}
+	}
 }
 
 

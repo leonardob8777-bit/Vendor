@@ -66,11 +66,23 @@ struct SwipeToDelete<Content: View>: View {
 				Button {
 					commit()
 				} label: {
-					Image(systemName: "xmark")
-						.font(.system(size: armed ? 22 : 18, weight: .bold))
-						.foregroundStyle(.white)
+					// The hit area grows with the swipe so more of the revealed
+					// panel is tappable, but the glyph itself stays put at a fixed
+					// width — otherwise, centred inside a frame as wide as `travel`,
+					// it drifted toward the middle of the panel the further the
+					// card had been dragged, and sat somewhere different on every
+					// row mid-delete during a multi-swipe.
+					Color.clear
 						.frame(width: max(restWidth, travel), height: 44)
+						.overlay(alignment: .trailing) {
+							Image(systemName: "xmark")
+								.font(.system(size: armed ? 22 : 18, weight: .bold))
+								.foregroundStyle(.white)
+								.frame(width: restWidth, height: 44)
+						}
+						.contentShape(Rectangle())
 				}
+				.accessibilityLabel(t("common.delete"))
 				.disabled(!revealed)
 			}
 			.opacity(revealed ? 1 : 0)

@@ -332,12 +332,7 @@ struct IPAView: View {
 	/// the moment `sign(_:)` checked `canSignNow`. Nil here has to mean
 	/// exactly one thing — nothing can currently sign — since it's also what
 	/// keeps the toolbar button off the screen.
-	private var leadCertificate: StoredCertificate? {
-		certificates.certificates
-			.filter(\.canSignNow)
-			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
-			.first
-	}
+	private var leadCertificate: StoredCertificate? { certificates.leadCertificate() }
 
 	/// Packages worth offering to "re-sign all": already signed once, but not
 	/// with the certificate that would be used if they were signed today. A
@@ -362,9 +357,22 @@ struct IPAView: View {
 	}
 
 	private var shelfPicker: some View {
-		HStack(spacing: 6) {
+		// Signed and Imported are complementary, so one pass over the shelf
+		// gets every count this row needs — three separate `.filter().count`
+		// calls here (one per tab, on every render) each walked the whole
+		// array again for a number the previous two passes already had.
+		let signedCount = store.packages.reduce(into: 0) { total, item in
+			if item.isSigned { total += 1 }
+		}
+		let counts: [Shelf: Int] = [
+			.all: store.packages.count,
+			.signed: signedCount,
+			.imported: store.packages.count - signedCount,
+		]
+
+		return HStack(spacing: 6) {
 			ForEach(Shelf.allCases, id: \.self) { option in
-				let count = store.packages.filter(option.matches).count
+				let count = counts[option] ?? 0
 				Button {
 					withAnimation(.easeInOut(duration: 0.2)) { shelf = option }
 				} label: {
@@ -796,9 +804,15 @@ struct IPAView: View {
 	// MARK: Chrome
 
 	private var toolbarButtons: some View {
-		HStack(spacing: 10) {
-			if !packagesNeedingResign.isEmpty {
-				resignAllButton
+		// Computed once and handed down rather than read again inside
+		// `resignAllButton`: each call re-derives `leadCertificate` (its own
+		// filter-and-sort of every certificate) and then filters the whole
+		// package shelf, so reading it twice in the same render did that
+		// work twice for the same answer.
+		let targets = packagesNeedingResign
+		return HStack(spacing: 10) {
+			if !targets.isEmpty {
+				resignAllButton(targets: targets)
 			}
 			addButton
 		}
@@ -821,9 +835,8 @@ struct IPAView: View {
 	/// Only appears once a certificate change has actually left something
 	/// behind — the ordinary case is that nothing has, and a button offering
 	/// to redo work nobody needs redone would just be clutter next to Import.
-	private var resignAllButton: some View {
-		let targets = packagesNeedingResign
-		return Button {
+	private func resignAllButton(targets: [ImportedIPA]) -> some View {
+		Button {
 			guard let lead = leadCertificate else { return }
 			Haptics.tap()
 			confirmingResignAll = ResignAllConfirmation(certificateName: lead.name, targets: targets)
@@ -853,52 +866,63 @@ struct IPAView: View {
 		let ready = isReady(item)
 
 		return VStack(alignment: .leading, spacing: 12) {
-			HStack(spacing: 12) {
-				packageIcon(item)
+			// A real button rather than `.onTapGesture` on the row: the same
+			// pattern `AppsRow`/`FeaturedAppRow` already use, and the one that
+			// gives VoiceOver something to land on and announce at all — a tap
+			// gesture on a plain `Rectangle` shape is invisible to it. The pill
+			// below is a button of its own, nested inside this one — already the
+			// same shape as Get sitting inside an Apps row, and tested for real
+			// on a device: the tap goes to whichever button is under the finger.
+			Button {
+				toggle(item, isOpen: isOpen)
+			} label: {
+				HStack(spacing: 12) {
+					packageIcon(item)
 
-				VStack(alignment: .leading, spacing: 3) {
-					Text(item.name)
-						.font(.system(size: 15, weight: .semibold))
-						.foregroundStyle(Color.inkPrimary)
-						.lineLimit(1)
-
-					HStack(spacing: 4) {
-						if let version = item.version {
-							Text(version)
-							Text("·")
-						}
-						Text(item.bundleIdentifier ?? item.displaySize)
+					VStack(alignment: .leading, spacing: 3) {
+						Text(item.name)
+							.font(.system(size: 15, weight: .semibold))
+							.foregroundStyle(Color.inkPrimary)
 							.lineLimit(1)
-							.truncationMode(.middle)
-					}
-					.font(.system(size: 11))
-					.foregroundStyle(Color.inkSecondary)
 
-					// State line, so the row says where the package stands
-					// without having to be opened.
-					HStack(spacing: 4) {
-						Image(systemName: ready ? "checkmark.seal.fill" : "square.and.arrow.down")
-							.font(.system(size: 10, weight: .semibold))
-						Text(ready ? t("ipa.stateSigned") : t("ipa.stateImported"))
-							.font(.system(size: 11, weight: .medium))
-					}
-					.foregroundStyle(ready ? Color.ok : Color.mint)
+						HStack(spacing: 4) {
+							if let version = item.version {
+								Text(version)
+								Text("·")
+							}
+							Text(item.bundleIdentifier ?? item.displaySize)
+								.lineLimit(1)
+								.truncationMode(.middle)
+						}
+						.font(.system(size: 11))
+						.foregroundStyle(Color.inkSecondary)
 
-					// Same reasoning as the state line above, for
-					// `SignOptions.changeCount`: whether this package is being
-					// signed as it arrived, without opening the card to read
-					// every field in `SignOptionsSection`.
-					if !isOpen, item.options.changeCount > 0 {
-						Badge(text: changeSummary(item.options.changeCount), tone: .brand)
+						// State line, so the row says where the package stands
+						// without having to be opened.
+						HStack(spacing: 4) {
+							Image(systemName: ready ? "checkmark.seal.fill" : "square.and.arrow.down")
+								.font(.system(size: 10, weight: .semibold))
+							Text(ready ? t("ipa.stateSigned") : t("ipa.stateImported"))
+								.font(.system(size: 11, weight: .medium))
+						}
+						.foregroundStyle(ready ? Color.ok : Color.mint)
+
+						// Same reasoning as the state line above, for
+						// `SignOptions.changeCount`: whether this package is being
+						// signed as it arrived, without opening the card to read
+						// every field in `SignOptionsSection`.
+						if !isOpen, item.options.changeCount > 0 {
+							Badge(text: changeSummary(item.options.changeCount), tone: .brand)
+						}
 					}
+
+					Spacer(minLength: 6)
+
+					actionPill(item, ready: ready)
 				}
-
-				Spacer(minLength: 6)
-
-				actionPill(item, ready: ready)
+				.contentShape(Rectangle())
 			}
-			.contentShape(Rectangle())
-			.onTapGesture { toggle(item, isOpen: isOpen) }
+			.buttonStyle(.plain)
 
 			if isOpen {
 				Divider().overlay(Color.inkSecondary.opacity(0.2))
@@ -1280,6 +1304,7 @@ struct IPAView: View {
 						.frame(width: 44, height: 44)
 						.background(Circle().fill(Color.badSoft))
 				}
+				.accessibilityLabel(t("common.delete"))
 			}
 
 			if ready {

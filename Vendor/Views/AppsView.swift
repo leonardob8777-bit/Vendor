@@ -28,6 +28,12 @@ final class AppsViewModel: ObservableObject {
 	/// Repositories that were added but could not be read this time, by name.
 	@Published private(set) var unreachable: [String] = []
 	@Published var query = ""
+	/// Bumped at the start of every `load()`. The button, pull-to-refresh,
+	/// and the initial `.task` can all start one while an earlier call is
+	/// still awaiting the network — without this, whichever finishes last
+	/// wins regardless of which one actually started last, and a slow first
+	/// load can silently overwrite a fresher reload's results.
+	private var loadToken = 0
 
 	/// Loads every repository at once.
 	///
@@ -35,6 +41,9 @@ final class AppsViewModel: ObservableObject {
 	/// separately and its failure is reported beside the ones that worked,
 	/// rather than replacing the whole screen with an error.
 	func load() async {
+		loadToken += 1
+		let token = loadToken
+
 		state = .loading
 		unreachable = []
 
@@ -55,6 +64,10 @@ final class AppsViewModel: ObservableObject {
 				failed.append(entry.url.host ?? entry.url.absoluteString)
 			}
 		}
+
+		// A newer call already took the screen over; this one's results
+		// answer a request nobody is waiting on anymore.
+		guard token == loadToken else { return }
 
 		// Only worth taking over the screen when nothing at all came back.
 		if loaded.isEmpty && custom.isEmpty {
@@ -89,6 +102,7 @@ final class AppsViewModel: ObservableObject {
 		}
 		loaded.sort { rank($0) < rank($1) }
 
+		guard token == loadToken else { return }
 		unreachable = failed
 		state = .loaded(loaded)
 	}

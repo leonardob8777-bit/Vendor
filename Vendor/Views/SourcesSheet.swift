@@ -38,6 +38,12 @@ struct SourcesSheet: View {
 		var failed = false
 	}
 	@State private var statuses: [URL: SourceStatus] = [:]
+	/// Bumped per URL every time `check(_:)` is asked to look at it again.
+	/// The per-row auto-check on appear and “Recheck All” can both have a
+	/// fetch for the same repository in flight at once — without this, an
+	/// older check's answer landing after a newer one's silently rolls the
+	/// row back to stale data with no sign a fresher check ever ran.
+	@State private var checkGeneration: [URL: Int] = [:]
 	@State private var confirmingRemoval: CustomSource?
 
 	var body: some View {
@@ -111,30 +117,7 @@ struct SourcesSheet: View {
 			.padding(.trailing, 14)
 			.accessibilityLabel(t("common.close"))
 		}
-		.background {
-			ZStack {
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.fill(.ultraThinMaterial)
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.fill(
-						LinearGradient(
-							colors: [Color.brand.opacity(0.13), Color.mint.opacity(0.07)],
-							startPoint: .topLeading, endPoint: .bottomTrailing
-						)
-					)
-				RoundedRectangle(cornerRadius: 28, style: .continuous)
-					.strokeBorder(
-						LinearGradient(
-							colors: [.white.opacity(0.28), .white.opacity(0.05), Color.mint.opacity(0.18)],
-							startPoint: .topLeading, endPoint: .bottomTrailing
-						),
-						lineWidth: 1
-					)
-			}
-		}
-		.clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-		.shadow(color: .black.opacity(0.45), radius: 30, y: 16)
-		.shadow(color: Color.brand.opacity(0.20), radius: 36, y: 20)
+		.sheetPanelBackground()
 	}
 
 	// MARK: Header
@@ -440,15 +423,22 @@ struct SourcesSheet: View {
 
 	private func check(_ url: URL) {
 		statuses[url, default: SourceStatus()].checking = true
+		checkGeneration[url, default: 0] += 1
+		let generation = checkGeneration[url]
 		Task {
+			let result: SourceStatus
 			do {
 				let source = try await SourceLoader.load(from: url)
-				statuses[url] = SourceStatus(
+				result = SourceStatus(
 					checking: false, appCount: source.apps.count, lastChecked: Date(), failed: false
 				)
 			} catch {
-				statuses[url] = SourceStatus(checking: false, appCount: nil, lastChecked: Date(), failed: true)
+				result = SourceStatus(checking: false, appCount: nil, lastChecked: Date(), failed: true)
 			}
+			// A newer check for this same repository started while this one
+			// was still in flight, so this answer is stale by definition.
+			guard checkGeneration[url] == generation else { return }
+			statuses[url] = result
 		}
 	}
 

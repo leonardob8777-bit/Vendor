@@ -36,12 +36,7 @@ struct CertificatesView: View {
 	/// import. That fallback exists so Home never shows a blank panel to
 	/// someone who owns a rejected certificate; here it would mislabel a dead
 	/// certificate "Main" when nothing is actually leading with it.
-	private var leadCertificate: StoredCertificate? {
-		store.certificates
-			.filter(\.canSignNow)
-			.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
-			.first
-	}
+	private var leadCertificate: StoredCertificate? { store.leadCertificate() }
 
 	/// Whether any floating window is up — every one of them blurs the list
 	/// and hides the tab bar the same way, so they share one flag instead of

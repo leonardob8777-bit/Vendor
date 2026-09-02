@@ -238,15 +238,22 @@ final class IPAStore: ObservableObject {
 			updated.tweakFileNames.append(source.lastPathComponent)
 		}
 		try write(updated)
-		reload()
+		publish(updated)
 	}
 
 	func removeTweak(named name: String, from item: ImportedIPA) {
 		var updated = item
 		try? fm.removeItem(at: tweaksFolder(for: item.id).appendingPathComponent(name))
 		updated.tweakFileNames.removeAll { $0 == name }
-		try? write(updated)
-		reload()
+		// Publishing only after a confirmed write, here and in the three
+		// mutators below: `publish` replaces this session's in-memory record
+		// with `updated` directly rather than re-reading it back from disk
+		// the way `reload()` used to, so a write that silently failed —
+		// disk full, sandbox hiccup — would otherwise leave the shelf
+		// showing a change that was never actually saved, until the next
+		// launch quietly reverted it.
+		guard (try? write(updated)) != nil else { return }
+		publish(updated)
 	}
 
 	/// Records a successful signing run, which moves the package to the Signed
@@ -261,8 +268,8 @@ final class IPAStore: ObservableObject {
 		if let size = try? fm.attributesOfItem(atPath: signedURL(for: item.id).path)[.size] as? Int64 {
 			updated.sizeBytes = size
 		}
-		try? write(updated)
-		reload()
+		guard (try? write(updated)) != nil else { return }
+		publish(updated)
 	}
 
 	/// Files the tweaks queued for a package, as URLs the pipeline can read.
@@ -273,8 +280,8 @@ final class IPAStore: ObservableObject {
 	func setCertificate(_ certificateID: UUID?, for item: ImportedIPA) {
 		var updated = item
 		updated.signedWithCertificateID = certificateID
-		try? write(updated)
-		reload()
+		guard (try? write(updated)) != nil else { return }
+		publish(updated)
 	}
 
 	// MARK: Sign options
@@ -282,8 +289,8 @@ final class IPAStore: ObservableObject {
 	func setOptions(_ options: SignOptions, for item: ImportedIPA) {
 		var updated = item
 		updated.signOptions = options
-		try? write(updated)
-		reload()
+		guard (try? write(updated)) != nil else { return }
+		publish(updated)
 	}
 
 	/// Artwork the user chose to sign in, as opposed to ``iconURL`` which holds
@@ -321,6 +328,19 @@ final class IPAStore: ObservableObject {
 	func availableBytes() -> Int64? {
 		let values = try? root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
 		return values?.volumeAvailableCapacityForImportantUsage
+	}
+
+	/// Replaces one package's entry with an already-updated value, instead
+	/// of the full `reload()` every mutator above used to call — that re-lists
+	/// the whole `IPAs/` directory and re-decodes every other package's
+	/// `metadata.json` from disk just to reflect a change to one of them.
+	private func publish(_ item: ImportedIPA) {
+		if let index = packages.firstIndex(where: { $0.id == item.id }) {
+			packages[index] = item
+		} else {
+			packages.append(item)
+			packages.sort { $0.importedAt > $1.importedAt }
+		}
 	}
 
 	func delete(_ item: ImportedIPA) {
